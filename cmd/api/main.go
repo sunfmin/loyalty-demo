@@ -9,37 +9,46 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 	
 	"github.com/opentracing/opentracing-go"
+	"github.com/yourorg/loyalty-demo/internal/config"
+	"github.com/yourorg/loyalty-demo/internal/middleware"
 )
 
 func main() {
+	// Load configuration from environment
+	cfg := config.Load()
+	
 	// Initialize NoopTracer for development (production will use Jaeger/Zipkin)
 	opentracing.SetGlobalTracer(opentracing.NoopTracer{})
-	
-	// TODO: Load configuration from environment
-	port := os.Getenv("SERVER_PORT")
-	if port == "" {
-		port = "8080"
-	}
 	
 	// Create HTTP multiplexer
 	mux := http.NewServeMux()
 	
-	// Register health check endpoint
+	// Register health check endpoint (no auth required)
 	mux.HandleFunc("/health", healthCheckHandler)
+	
+	// Apply middleware chain
+	// Order: Recovery → Logging → Tracing → CORS
+	handler := middleware.Recovery(
+		middleware.Logging(
+			middleware.Tracing(
+				middleware.CORS(mux),
+			),
+		),
+	)
 	
 	// Create HTTP server
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%s", port),
-		Handler:      mux,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
+		Handler:      handler,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
 	}
 	
-	log.Printf("Starting loyalty API server on port %s", port)
+	log.Printf("Starting loyalty API server on port %s", cfg.Server.Port)
+	log.Printf("Environment: %s, Debug: %v", cfg.App.Environment, cfg.App.Debug)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}

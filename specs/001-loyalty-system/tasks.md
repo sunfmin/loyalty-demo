@@ -51,52 +51,52 @@
 
 ### Database Setup
 
-- [ ] T011 Create GORM models for all entities in `internal/models/customer.go`
+- [x] T011 Create GORM models for all entities in `internal/models/customer.go`
   - Customer model with UUID, account_id, membership_number, referral_code, referred_by, enrolled_at, current_balance, tier_id
   - Relationships: BelongsTo Tier, HasMany PointTransactions, HasMany Redemptions
-- [ ] T012 [P] Create PointTransaction model in `internal/models/transaction.go`
+- [x] T012 [P] Create PointTransaction model in `internal/models/transaction.go`
   - Fields: id, customer_id, amount, type, reference_id, reference_type, description, campaign_id, redemption_id, expired_at, expires_at, admin_user_id, admin_note, created_at
   - Immutable (append-only) event log
-- [ ] T013 [P] Create MembershipTier model in `internal/models/tier.go`
+- [x] T013 [P] Create MembershipTier model in `internal/models/tier.go`
   - Fields: id, name, level, qualification_points, evaluation_days, earn_rate_multiplier, description
-- [ ] T014 [P] Create Reward model in `internal/models/reward.go`
+- [x] T014 [P] Create Reward model in `internal/models/reward.go`
   - Fields: id, name, description, type, point_cost, is_active, metadata (JSONB)
-- [ ] T015 [P] Create Redemption model in `internal/models/redemption.go`
+- [x] T015 [P] Create Redemption model in `internal/models/redemption.go`
   - Fields: id, customer_id, reward_id, points_deducted, status, code, used_at, reversed_at, reversal_reason
-- [ ] T016 [P] Create PromotionalCampaign model in `internal/models/campaign.go`
+- [x] T016 [P] Create PromotionalCampaign model in `internal/models/campaign.go`
   - Fields: id, name, description, start_date, end_date, point_multiplier, bonus_points, is_active, conditions (JSONB), priority
-- [ ] T017 Create AutoMigrate function in `services/migrations.go` (exports migration for external apps)
+- [x] T017 Create AutoMigrate function in `services/migrations.go` (exports migration for external apps)
   - Migrate all models in correct order (customers, tiers, campaigns, rewards, transactions, redemptions)
 
 ### Protobuf Setup
 
-- [ ] T018 [P] Generate Go code from loyalty.proto: `protoc --go_out=. --go_opt=paths=source_relative api/v1/loyalty.proto`
-- [ ] T019 [P] Generate Go code from transaction.proto: `protoc --go_out=. --go_opt=paths=source_relative api/v1/transaction.proto`
-- [ ] T020 [P] Generate Go code from reward.proto: `protoc --go_out=. --go_opt=paths=source_relative api/v1/reward.proto`
-- [ ] T021 [P] Generate Go code from campaign.proto: `protoc --go_out=. --go_opt=paths=source_relative api/v1/campaign.proto`
-- [ ] T022 Add go:generate directives to main.go for protobuf generation
+- [x] T018 [P] Generate Go code from loyalty.proto: `protoc --go_out=. --go_opt=paths=source_relative api/v1/loyalty.proto`
+- [x] T019 [P] Generate Go code from transaction.proto: `protoc --go_out=. --go_opt=paths=source_relative api/v1/transaction.proto`
+- [x] T020 [P] Generate Go code from reward.proto: `protoc --go_out=. --go_opt=paths=source_relative api/v1/reward.proto`
+- [x] T021 [P] Generate Go code from campaign.proto: `protoc --go_out=. --go_opt=paths=source_relative api/v1/campaign.proto`
+- [x] T022 Add go:generate directives to main.go for protobuf generation
 
 ### Application Infrastructure
 
-- [ ] T023 Create database connection helper in `internal/config/database.go`
+- [x] T023 Create database connection helper in `internal/config/database.go`
   - Load DSN from environment variables
   - Create GORM connection pool with config (MaxIdleConns, MaxOpenConns, ConnMaxLifetime)
   - Implement health check function
-- [ ] T024 Create configuration loader in `internal/config/config.go`
+- [x] T024 Create configuration loader in `internal/config/config.go`
   - Load from environment: database, server, tracing, points rules (earn rate, expiration days)
-- [ ] T025 [P] Setup HTTP router using standard net/http in `cmd/api/main.go`
+- [x] T025 [P] Setup HTTP router using standard net/http in `cmd/api/main.go`
   - Create http.ServeMux
   - Register health check endpoint at /health
-- [ ] T026 [P] Implement OpenTracing middleware in `internal/middleware/tracing.go`
+- [x] T026 [P] Implement OpenTracing middleware in `internal/middleware/tracing.go`
   - Extract or start span from request headers
   - Set span tags (http.method, http.url, http.status_code)
   - Inject trace ID into response headers
-- [ ] T027 [P] Implement logging middleware in `internal/middleware/logging.go`
+- [x] T027 [P] Implement logging middleware in `internal/middleware/logging.go`
   - Log request method, path, status code, duration
-- [ ] T028 [P] Implement recovery middleware in `internal/middleware/recovery.go`
+- [x] T028 [P] Implement recovery middleware in `internal/middleware/recovery.go`
   - Catch panics, log stack trace, return 500 error
-- [ ] T029 [P] Implement CORS middleware in `internal/middleware/cors.go`
-- [ ] T030 [P] Implement authentication middleware in `internal/middleware/auth.go`
+- [x] T029 [P] Implement CORS middleware in `internal/middleware/cors.go`
+- [x] T030 [P] Implement authentication middleware in `internal/middleware/auth.go`
   - Extract JWT token from Authorization header
   - Validate token and extract user ID
   - Store user ID in context
@@ -104,36 +104,36 @@
 
 ### Error Handling Setup
 
-- [ ] T031 Define sentinel errors in `services/errors.go`
+- [x] T031 Define sentinel errors in `services/errors.go`
   - ErrNotEnrolled, ErrAlreadyEnrolled, ErrInsufficientBalance, ErrInvalidReferralCode
   - ErrRewardNotFound, ErrRewardInactive, ErrRedemptionNotFound, ErrRedemptionAlreadyReversed
   - ErrCampaignNotFound, ErrInvalidDateRange, ErrMissingRequired, ErrInvalidAmount
-- [ ] T032 Define HTTP error codes singleton in `handlers/error_codes.go`
+- [x] T032 Define HTTP error codes singleton in `handlers/error_codes.go`
   - ErrorCode struct with Code, Message, HTTPStatus, ServiceErr fields
   - Errors singleton with all error definitions mapped to sentinel errors
   - AllErrors() function returning slice of all error codes
-- [ ] T033 Implement HandleServiceError function in `handlers/error_codes.go`
+- [x] T033 Implement HandleServiceError function in `handlers/error_codes.go`
   - Iterate through AllErrors() to find matching ServiceErr
   - Handle context errors (Canceled → 499, DeadlineExceeded → 504)
   - Default to InternalError for unmapped errors
 
 ### Testing Infrastructure
 
-- [ ] T034 Create testcontainers helper in `internal/testutil/database_test.go`
+- [x] T034 Create testcontainers helper in `internal/testutil/database_test.go`
   - setupTestDB(t *testing.T) (*gorm.DB, func()) function
   - Start PostgreSQL container with testcontainers
   - Run AutoMigrate
   - Return cleanup function
-- [ ] T035 [P] Create table truncation helper in `internal/testutil/database_test.go`
+- [x] T035 [P] Create table truncation helper in `internal/testutil/database_test.go`
   - truncateTables(db *gorm.DB, tables ...string) function
   - Truncate in reverse order with CASCADE
-- [ ] T036 [P] Create fixture helper utilities in `internal/testutil/fixtures_test.go`
+- [x] T036 [P] Create fixture helper utilities in `internal/testutil/fixtures_test.go`
   - createTestCustomer(db, overrides) function
   - createTestTier(db, overrides) function
   - createTestReward(db, overrides) function
   - createTestCampaign(db, overrides) function
 
-**Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+**Checkpoint**: ✅ Foundation ready - user story implementation can now begin in parallel
 
 ---
 
