@@ -15,12 +15,14 @@ import (
 // PointsHandler handles point earning and transaction endpoints
 type PointsHandler struct {
 	transactionService services.TransactionService
+	loyaltyService     services.LoyaltyService // For tier evaluation after earning
 }
 
 // NewPointsHandler creates a new points handler
-func NewPointsHandler(transactionService services.TransactionService) *PointsHandler {
+func NewPointsHandler(transactionService services.TransactionService, loyaltyService services.LoyaltyService) *PointsHandler {
 	return &PointsHandler{
 		transactionService: transactionService,
+		loyaltyService:     loyaltyService,
 	}
 }
 
@@ -60,6 +62,15 @@ func (h *PointsHandler) HandleEarnPoints(w http.ResponseWriter, r *http.Request)
 		span.SetTag("error.message", err.Error())
 		HandleServiceError(w, err)
 		return
+	}
+
+	// Evaluate tier progression after earning points (best effort - don't fail if tier evaluation fails)
+	if h.loyaltyService != nil && response.Transaction != nil {
+		customerID := response.Transaction.CustomerId
+		if _, tierErr := h.loyaltyService.EvaluateCustomerTier(ctx, customerID); tierErr != nil {
+			// Log but don't fail the request
+			span.SetTag("tier_evaluation_error", tierErr.Error())
+		}
 	}
 
 	// Success response

@@ -342,9 +342,10 @@ func TestEarnPoints(t *testing.T) {
 
 			rec := httptest.NewRecorder()
 
-			// Create service and handler
+			// Create services and handler
 			transactionService := services.NewTransactionService(db)
-			handler := NewPointsHandler(transactionService)
+			loyaltyService := services.NewLoyaltyService(db)
+			handler := NewPointsHandler(transactionService, loyaltyService)
 
 			// Call handler
 			handler.HandleEarnPoints(rec, req)
@@ -542,9 +543,10 @@ func TestListTransactions(t *testing.T) {
 
 			rec := httptest.NewRecorder()
 
-			// Create service and handler
+			// Create services and handler
 			transactionService := services.NewTransactionService(db)
-			handler := NewPointsHandler(transactionService)
+			loyaltyService := services.NewLoyaltyService(db)
+			handler := NewPointsHandler(transactionService, loyaltyService)
 
 			// Call handler
 			handler.HandleListTransactions(rec, req)

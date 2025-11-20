@@ -46,7 +46,7 @@ func main() {
 	
 	// Create handlers
 	enrollmentHandler := handlers.NewEnrollmentHandler(loyaltyService)
-	pointsHandler := handlers.NewPointsHandler(transactionService)
+	pointsHandler := handlers.NewPointsHandler(transactionService, loyaltyService) // Pass loyaltyService for tier evaluation
 	rewardsHandler := handlers.NewRewardsHandler(rewardService)
 	
 	// Create HTTP multiplexer

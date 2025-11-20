@@ -381,3 +381,69 @@ func TestGetCustomerStatus(t *testing.T) {
 	}
 }
 
+func TestListTiers(t *testing.T) {
+	// Setup test database
+	db, cleanup := testutil.SetupTestDB(t)
+	defer cleanup()
+	defer testutil.TruncateTables(db, "membership_tiers")
+
+	// Create multiple tiers in various orders
+	testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Gold",
+		"level":                2,
+		"qualification_points": int64(1000),
+		"earn_rate_multiplier": 1.5,
+	})
+	testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Base",
+		"level":                0,
+		"qualification_points": int64(0),
+		"earn_rate_multiplier": 1.0,
+	})
+	testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Silver",
+		"level":                1,
+		"qualification_points": int64(500),
+		"earn_rate_multiplier": 1.25,
+	})
+
+	// Test case
+	req := httptest.NewRequest(http.MethodGet, "/v1/loyalty/tiers", nil)
+	rec := httptest.NewRecorder()
+
+	// Create service and handler
+	loyaltyService := services.NewLoyaltyService(db)
+	handler := NewEnrollmentHandler(loyaltyService)
+
+	// Call handler
+	handler.HandleListTiers(rec, req)
+
+	// Verify response status
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+
+	// Parse and validate response
+	var resp loyaltyv1.ListTiersResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Verify we got 3 tiers
+	if len(resp.Tiers) != 3 {
+		t.Errorf("Expected 3 tiers, got %d", len(resp.Tiers))
+	}
+
+	// Verify ordered by level ASC
+	if len(resp.Tiers) == 3 {
+		if resp.Tiers[0].Level != 0 || resp.Tiers[0].Name != "Base" {
+			t.Errorf("Expected first tier Base(0), got %s(%d)", resp.Tiers[0].Name, resp.Tiers[0].Level)
+		}
+		if resp.Tiers[1].Level != 1 || resp.Tiers[1].Name != "Silver" {
+			t.Errorf("Expected second tier Silver(1), got %s(%d)", resp.Tiers[1].Name, resp.Tiers[1].Level)
+		}
+		if resp.Tiers[2].Level != 2 || resp.Tiers[2].Name != "Gold" {
+			t.Errorf("Expected third tier Gold(2), got %s(%d)", resp.Tiers[2].Name, resp.Tiers[2].Level)
+		}
+	}
+}
