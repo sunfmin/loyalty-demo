@@ -72,16 +72,16 @@ func main() {
 	mux.Handle("/v1/loyalty/rewards/redeem", middleware.Authentication(http.HandlerFunc(rewardsHandler.HandleRedeemReward)))
 	mux.Handle("/v1/loyalty/redemptions", middleware.Authentication(http.HandlerFunc(rewardsHandler.HandleListRedemptions)))
 	
-	// Register admin UI endpoints (require admin role via Authentication middleware with admin token)
-	mux.HandleFunc("/admin", adminUIHandler.HandleDashboard)
-	mux.HandleFunc("/admin/adjust-points", adminUIHandler.HandleAdjustPoints)
-	mux.HandleFunc("/admin/campaigns/new", adminUIHandler.HandleCreateCampaign)
-	mux.HandleFunc("/admin/customers", adminUIHandler.HandleCustomerSearch)
+	// Register admin UI endpoints (wrapped with admin authentication middleware)
+	mux.Handle("/admin", middleware.AdminAuthentication(http.HandlerFunc(adminUIHandler.HandleDashboard)))
+	mux.Handle("/admin/adjust-points", middleware.AdminAuthentication(http.HandlerFunc(adminUIHandler.HandleAdjustPoints)))
+	mux.Handle("/admin/campaigns/new", middleware.AdminAuthentication(http.HandlerFunc(adminUIHandler.HandleCreateCampaign)))
+	mux.Handle("/admin/customers", middleware.AdminAuthentication(http.HandlerFunc(adminUIHandler.HandleCustomerSearch)))
 	
-	// Register admin API endpoints for HTMX (return HTML fragments)
-	mux.HandleFunc("/admin/api/adjust-points", adminUIHandler.HandleAdjustPointsSubmit)
-	mux.HandleFunc("/admin/api/campaigns", adminUIHandler.HandleCreateCampaignSubmit)
-	mux.HandleFunc("/admin/api/customers/lookup", adminUIHandler.HandleCustomerLookup)
+	// Register admin API endpoints for HTMX (return HTML fragments, also need admin auth)
+	mux.Handle("/admin/api/adjust-points", middleware.AdminAuthentication(http.HandlerFunc(adminUIHandler.HandleAdjustPointsSubmit)))
+	mux.Handle("/admin/api/campaigns", middleware.AdminAuthentication(http.HandlerFunc(adminUIHandler.HandleCreateCampaignSubmit)))
+	mux.Handle("/admin/api/customers/lookup", middleware.AdminAuthentication(http.HandlerFunc(adminUIHandler.HandleCustomerLookup)))
 	
 	// Apply middleware chain
 	// Order: Recovery → Logging → Tracing → CORS

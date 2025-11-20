@@ -39,12 +39,7 @@ func NewAdminUIHandler(
 
 // HandleDashboard renders the admin dashboard
 func (h *AdminUIHandler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
-	// Verify admin role
-	if !middleware.HasRole(r.Context(), "admin") {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
+	// Admin authentication handled by middleware
 	ctx := r.Context()
 	page := h.renderDashboard(ctx)
 
@@ -207,12 +202,7 @@ func (h *AdminUIHandler) renderActivityItem(title, description, timestamp string
 
 // HandleAdjustPoints renders the point adjustment form
 func (h *AdminUIHandler) HandleAdjustPoints(w http.ResponseWriter, r *http.Request) {
-	// Verify admin role
-	if !middleware.HasRole(r.Context(), "admin") {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
+	// Admin authentication handled by middleware
 	ctx := r.Context()
 	page := h.renderAdjustPointsPage(ctx)
 
@@ -333,12 +323,7 @@ func (h *AdminUIHandler) renderAdjustPointsPage(ctx context.Context) HTMLCompone
 
 // HandleCreateCampaign renders the campaign creation form
 func (h *AdminUIHandler) HandleCreateCampaign(w http.ResponseWriter, r *http.Request) {
-	// Verify admin role
-	if !middleware.HasRole(r.Context(), "admin") {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
+	// Admin authentication handled by middleware
 	ctx := r.Context()
 	page := h.renderCreateCampaignPage(ctx)
 
@@ -449,12 +434,7 @@ func (h *AdminUIHandler) renderCreateCampaignPage(ctx context.Context) HTMLCompo
 
 // HandleCustomerSearch renders the customer search interface
 func (h *AdminUIHandler) HandleCustomerSearch(w http.ResponseWriter, r *http.Request) {
-	// Verify admin role
-	if !middleware.HasRole(r.Context(), "admin") {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
+	// Admin authentication handled by middleware
 	ctx := r.Context()
 	
 	// Get search query
@@ -562,12 +542,7 @@ func formatNumber(n int64) string {
 // HandleAdjustPointsSubmit handles HTMX form submission for point adjustment
 // Returns HTML fragment (not full page)
 func (h *AdminUIHandler) HandleAdjustPointsSubmit(w http.ResponseWriter, r *http.Request) {
-	// Verify admin role
-	if !middleware.HasRole(r.Context(), "admin") {
-		h.renderErrorMessage(w, r.Context(), "Forbidden: Admin access required")
-		return
-	}
-
+	// Admin authentication handled by middleware
 	ctx := r.Context()
 	
 	// Get admin user ID from context
@@ -613,12 +588,7 @@ func (h *AdminUIHandler) HandleAdjustPointsSubmit(w http.ResponseWriter, r *http
 // HandleCreateCampaignSubmit handles HTMX form submission for campaign creation
 // Returns HTML fragment (not full page)
 func (h *AdminUIHandler) HandleCreateCampaignSubmit(w http.ResponseWriter, r *http.Request) {
-	// Verify admin role
-	if !middleware.HasRole(r.Context(), "admin") {
-		h.renderErrorMessage(w, r.Context(), "Forbidden: Admin access required")
-		return
-	}
-
+	// Admin authentication handled by middleware
 	ctx := r.Context()
 
 	// Parse form data
@@ -656,12 +626,7 @@ func (h *AdminUIHandler) HandleCreateCampaignSubmit(w http.ResponseWriter, r *ht
 // HandleCustomerLookup handles HTMX request for customer details
 // Returns HTML fragment with customer info
 func (h *AdminUIHandler) HandleCustomerLookup(w http.ResponseWriter, r *http.Request) {
-	// Verify admin role
-	if !middleware.HasRole(r.Context(), "admin") {
-		h.renderErrorMessage(w, r.Context(), "Forbidden")
-		return
-	}
-
+	// Admin authentication handled by middleware
 	ctx := r.Context()
 	
 	// HTMX sends form data via query params
