@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -90,10 +91,47 @@ func (h *PointsHandler) HandleListTransactions(w http.ResponseWriter, r *http.Re
 	span.SetTag("account_id", accountID)
 
 	// Parse query parameters
-	// TODO: Parse query parameters into request object
+	query := r.URL.Query()
 	req := &loyaltyv1.ListTransactionsRequest{
 		Limit:  50,
 		Offset: 0,
+	}
+
+	// Parse limit
+	if limitStr := query.Get("limit"); limitStr != "" {
+		if limit, err := parseInt32(limitStr); err == nil {
+			req.Limit = limit
+		}
+	}
+
+	// Parse offset
+	if offsetStr := query.Get("offset"); offsetStr != "" {
+		if offset, err := parseInt32(offsetStr); err == nil {
+			req.Offset = offset
+		}
+	}
+
+	// Parse type filter
+	if typeStr := query.Get("type"); typeStr != "" {
+		switch typeStr {
+		case "EARN":
+			req.Type = loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN
+		case "REDEMPTION":
+			req.Type = loyaltyv1.TransactionType_TRANSACTION_TYPE_REDEMPTION
+		case "ADJUSTMENT":
+			req.Type = loyaltyv1.TransactionType_TRANSACTION_TYPE_ADJUSTMENT
+		case "REFERRAL":
+			req.Type = loyaltyv1.TransactionType_TRANSACTION_TYPE_REFERRAL
+		case "EXPIRATION":
+			req.Type = loyaltyv1.TransactionType_TRANSACTION_TYPE_EXPIRATION
+		}
+	}
+
+	// Validate limit
+	if req.Limit > 100 {
+		ext.Error.Set(span, true)
+		RespondWithError(w, Errors.ValueOutOfRange)
+		return
 	}
 
 	// Call service
@@ -110,5 +148,14 @@ func (h *PointsHandler) HandleListTransactions(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+// Helper function to parse int32 from string
+func parseInt32(s string) (int32, error) {
+	val, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return int32(val), nil
 }
 

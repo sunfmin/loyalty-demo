@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -378,5 +379,201 @@ func TestEarnPoints(t *testing.T) {
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+func TestListTransactions(t *testing.T) {
+	// Setup test database
+	db, cleanup := testutil.SetupTestDB(t)
+	defer cleanup()
+	defer testutil.TruncateTables(db, "point_transactions", "customers", "membership_tiers")
+
+	// Create base tier
+	baseTier := testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Base",
+		"level":                0,
+		"qualification_points": int64(0),
+		"earn_rate_multiplier": 1.0,
+	})
+
+	// Create test customer with multiple transactions
+	customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+		"account_id": "user-list-txn",
+		"tier_id":    &baseTier.ID,
+	})
+
+	// Create various transaction types
+	for i := 0; i < 5; i++ {
+		testutil.CreateTestTransaction(db, customer.ID, map[string]interface{}{
+			"amount":      int64(100 + i*10),
+			"type":        models.TransactionTypeEarn,
+			"description": fmt.Sprintf("EARN transaction %d", i+1),
+		})
+	}
+	for i := 0; i < 3; i++ {
+		testutil.CreateTestTransaction(db, customer.ID, map[string]interface{}{
+			"amount":      int64(-50 - i*5),
+			"type":        models.TransactionTypeRedemption,
+			"description": fmt.Sprintf("REDEMPTION transaction %d", i+1),
+		})
+	}
+
+	// Table-driven test cases
+	testCases := []struct {
+		name             string
+		accountID        string
+		queryParams      string
+		setupFixtures    func()
+		expectedStatus   int
+		expectedError    string
+		validateResponse func(t *testing.T, resp *loyaltyv1.ListTransactionsResponse)
+	}{
+		{
+			name:          "Happy path: List all transactions (no filters)",
+			accountID:     "user-list-txn",
+			queryParams:   "",
+			setupFixtures: func() {},
+			expectedStatus: http.StatusOK,
+			validateResponse: func(t *testing.T, resp *loyaltyv1.ListTransactionsResponse) {
+				// Should return all 8 transactions (5 EARN + 3 REDEMPTION)
+				if len(resp.Transactions) != 8 {
+					t.Errorf("Expected 8 transactions, got %d", len(resp.Transactions))
+				}
+				if resp.Total != 8 {
+					t.Errorf("Expected total 8, got %d", resp.Total)
+				}
+				// Verify ordered by created_at DESC (newest first)
+				if len(resp.Transactions) > 1 {
+					firstTime := resp.Transactions[0].CreatedAt.AsTime()
+					lastTime := resp.Transactions[len(resp.Transactions)-1].CreatedAt.AsTime()
+					if firstTime.Before(lastTime) {
+						t.Error("Expected transactions ordered by created_at DESC")
+					}
+				}
+			},
+		},
+		{
+			name:          "Happy path: Filter by type (EARN only)",
+			accountID:     "user-list-txn",
+			queryParams:   "?type=EARN",
+			setupFixtures: func() {},
+			expectedStatus: http.StatusOK,
+			validateResponse: func(t *testing.T, resp *loyaltyv1.ListTransactionsResponse) {
+				// Should return only 5 EARN transactions
+				if len(resp.Transactions) != 5 {
+					t.Errorf("Expected 5 EARN transactions, got %d", len(resp.Transactions))
+				}
+				// Verify all are EARN type
+				for _, tx := range resp.Transactions {
+					if tx.Type != loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN {
+						t.Error("Expected only EARN transactions")
+					}
+				}
+			},
+		},
+		{
+			name:          "Happy path: Pagination (limit 3)",
+			accountID:     "user-list-txn",
+			queryParams:   "?limit=3&offset=0",
+			setupFixtures: func() {},
+			expectedStatus: http.StatusOK,
+			validateResponse: func(t *testing.T, resp *loyaltyv1.ListTransactionsResponse) {
+				if len(resp.Transactions) != 3 {
+					t.Errorf("Expected 3 transactions (limit), got %d", len(resp.Transactions))
+				}
+				if resp.Limit != 3 {
+					t.Errorf("Expected limit 3, got %d", resp.Limit)
+				}
+				if resp.Total != 8 {
+					t.Errorf("Expected total 8, got %d", resp.Total)
+				}
+			},
+		},
+		{
+			name:          "Happy path: Empty result set (new customer)",
+			accountID:     "user-no-transactions",
+			queryParams:   "",
+			setupFixtures: func() {
+				testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-no-transactions",
+					"tier_id":    &baseTier.ID,
+				})
+			},
+			expectedStatus: http.StatusOK,
+			validateResponse: func(t *testing.T, resp *loyaltyv1.ListTransactionsResponse) {
+				if len(resp.Transactions) != 0 {
+					t.Errorf("Expected 0 transactions, got %d", len(resp.Transactions))
+				}
+				if resp.Total != 0 {
+					t.Errorf("Expected total 0, got %d", resp.Total)
+				}
+			},
+		},
+		{
+			name:           "Edge case: Customer not enrolled",
+			accountID:      "user-not-enrolled-list",
+			queryParams:    "",
+			setupFixtures:  func() {},
+			expectedStatus: http.StatusNotFound,
+			expectedError:  "CUSTOMER_NOT_FOUND",
+		},
+		{
+			name:           "Edge case: Missing authentication",
+			accountID:      "",
+			queryParams:    "",
+			setupFixtures:  func() {},
+			expectedStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup fixtures for this test case
+			tc.setupFixtures()
+
+			// Create request
+			url := "/v1/loyalty/transactions" + tc.queryParams
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+
+			// Add authentication to context (mock)
+			if tc.accountID != "" {
+				ctx := context.WithValue(req.Context(), middleware.UserIDKey, tc.accountID)
+				req = req.WithContext(ctx)
+			}
+
+			rec := httptest.NewRecorder()
+
+			// Create service and handler
+			transactionService := services.NewTransactionService(db)
+			handler := NewPointsHandler(transactionService)
+
+			// Call handler
+			handler.HandleListTransactions(rec, req)
+
+			// Verify response status
+			if rec.Code != tc.expectedStatus {
+				t.Errorf("Expected status %d, got %d", tc.expectedStatus, rec.Code)
+			}
+
+			// For success cases, validate response
+			if tc.expectedStatus == http.StatusOK && tc.validateResponse != nil {
+				var resp loyaltyv1.ListTransactionsResponse
+				if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+					t.Fatalf("Failed to decode response: %v", err)
+				}
+				tc.validateResponse(t, &resp)
+			}
+
+			// For error cases, validate error code
+			if tc.expectedError != "" {
+				var errResp map[string]interface{}
+				if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+					t.Fatalf("Failed to decode error response: %v", err)
+				}
+				if errResp["code"] != tc.expectedError {
+					t.Errorf("Expected error code %s, got %v", tc.expectedError, errResp["code"])
+				}
+			}
+		})
+	}
 }
 
