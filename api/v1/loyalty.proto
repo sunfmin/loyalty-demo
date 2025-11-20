@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package loyalty.v1;
+
+option go_package = "github.com/yourorg/loyalty-demo/api/gen/loyalty/v1;loyaltyv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Common types
+
+message Tier {
+  string id = 1;
+  string name = 2;
+  int32 level = 3;
+  int64 qualification_points = 4;
+  int32 evaluation_days = 5;
+  double earn_rate_multiplier = 6;
+  string description = 7;
+}
+
+message Customer {
+  string id = 1;
+  string account_id = 2;
+  string membership_number = 3;
+  string referral_code = 4;
+  string referred_by = 5;
+  google.protobuf.Timestamp enrolled_at = 6;
+  int64 current_balance = 7;
+  Tier tier = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message PointsExpiringSoon {
+  int64 amount = 1;
+  google.protobuf.Timestamp expiration_date = 2;
+}
+
+// Enrollment endpoints
+
+message EnrollCustomerRequest {
+  string referral_code = 1;  // Optional referral code
+}
+
+message EnrollCustomerResponse {
+  Customer customer = 1;
+}
+
+// Get customer status
+
+message GetCustomerRequest {
+  // Customer ID extracted from authentication context
+}
+
+message GetCustomerResponse {
+  Customer customer = 1;
+  int64 points_to_next_tier = 2;
+  PointsExpiringSoon points_expiring_soon = 3;
+}
+
+// List tiers
+
+message ListTiersRequest {
+}
+
+message ListTiersResponse {
+  repeated Tier tiers = 1;
+}
+
+// Error response
+
+message ErrorDetail {
+  string field = 1;
+  string constraint = 2;
+}
+
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+  ErrorDetail details = 3;
+}
+

@@ -30,16 +30,16 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Initialize Go module with `go mod init github.com/yourorg/loyalty-demo`
-- [ ] T002 [P] Install GORM dependencies: `go get -u gorm.io/gorm gorm.io/driver/postgres`
-- [ ] T003 [P] Install OpenTracing dependency: `go get -u github.com/opentracing/opentracing-go`
-- [ ] T004 [P] Install Protocol Buffers dependencies: `go get -u google.golang.org/protobuf google.golang.org/protobuf/testing/protocmp`
-- [ ] T005 [P] Install testcontainers-go: `go get -u github.com/testcontainers/testcontainers-go github.com/testcontainers/testcontainers-go/modules/postgres`
-- [ ] T006 [P] Install google/go-cmp for protobuf comparison: `go get -u github.com/google/go-cmp`
-- [ ] T007 [P] Create project directory structure per plan.md (services/, handlers/, api/, internal/models/, internal/middleware/, cmd/api/)
-- [ ] T008 [P] Setup .gitignore for Go project (vendor/, *.pb.go, .env, etc.)
-- [ ] T009 [P] Create .env.example with database configuration template
-- [ ] T010 [P] Setup golangci-lint configuration in .golangci.yml
+- [x] T001 Initialize Go module with `go mod init github.com/yourorg/loyalty-demo`
+- [x] T002 [P] Install GORM dependencies: `go get -u gorm.io/gorm gorm.io/driver/postgres`
+- [x] T003 [P] Install OpenTracing dependency: `go get -u github.com/opentracing/opentracing-go`
+- [x] T004 [P] Install Protocol Buffers dependencies: `go get -u google.golang.org/protobuf google.golang.org/protobuf/testing/protocmp`
+- [x] T005 [P] Install testcontainers-go: `go get -u github.com/testcontainers/testcontainers-go github.com/testcontainers/testcontainers-go/modules/postgres`
+- [x] T006 [P] Install google/go-cmp for protobuf comparison: `go get -u github.com/google/go-cmp`
+- [x] T007 [P] Create project directory structure per plan.md (services/, handlers/, api/, internal/models/, internal/middleware/, cmd/api/)
+- [x] T008 [P] Setup .gitignore for Go project (vendor/, *.pb.go, .env, etc.)
+- [x] T009 [P] Create .env.example with database configuration template
+- [x] T010 [P] Setup golangci-lint configuration in .golangci.yml
 
 ---
 

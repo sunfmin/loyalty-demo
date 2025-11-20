@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package loyalty.v1;
+
+option go_package = "github.com/yourorg/loyalty-demo/api/gen/loyalty/v1;loyaltyv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// Campaign types
+
+message PromotionalCampaign {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  google.protobuf.Timestamp start_date = 4;
+  google.protobuf.Timestamp end_date = 5;
+  double point_multiplier = 6;
+  int64 bonus_points = 7;
+  bool is_active = 8;
+  google.protobuf.Struct conditions = 9;  // Flexible JSON rules
+  int32 priority = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// Create campaign (Admin)
+
+message CreateCampaignRequest {
+  string name = 1;
+  string description = 2;
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
+  double point_multiplier = 5;
+  int64 bonus_points = 6;
+  google.protobuf.Struct conditions = 7;
+  int32 priority = 8;
+}
+
+message CreateCampaignResponse {
+  PromotionalCampaign campaign = 1;
+}
+
+// List campaigns (Admin)
+
+message ListCampaignsRequest {
+  bool active_only = 1;  // Default: false
+  int32 limit = 2;       // Default: 50
+  int32 offset = 3;      // Default: 0
+}
+
+message ListCampaignsResponse {
+  repeated PromotionalCampaign campaigns = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// Update campaign (Admin)
+
+message UpdateCampaignRequest {
+  string name = 1;
+  string description = 2;
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
+  double point_multiplier = 5;
+  int64 bonus_points = 6;
+  bool is_active = 7;
+  google.protobuf.Struct conditions = 8;
+  int32 priority = 9;
+}
+
+message UpdateCampaignResponse {
+  PromotionalCampaign campaign = 1;
+}
+
+// Delete campaign (Admin)
+
+message DeleteCampaignRequest {
+  // Campaign ID in URL path
+}
+
+message DeleteCampaignResponse {
+  // Empty response on success
+}
+
