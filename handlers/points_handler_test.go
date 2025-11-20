@@ -135,16 +135,32 @@ func TestEarnPoints(t *testing.T) {
 			},
 			expectedStatus: http.StatusCreated,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
-				// Base: $50 = 50 points
-				// Tier multiplier: 50 * 1.5 = 75 points
-				// Campaign bonus: 50 * (2.0 - 1.0) = 50 bonus points
-				// Total: 75 + 50 = 125 points
-				if resp.Transaction.Amount != 125 {
-					t.Errorf("Expected 125 points (1.5x tier + 2.0x campaign), got %d", resp.Transaction.Amount)
+				if resp.Transaction == nil {
+					t.Fatal("Expected transaction in response")
 				}
-				// Verify campaign was applied
-				if resp.CampaignApplied == nil {
-					t.Error("Expected campaign to be applied")
+				
+				// Build expected from REQUEST data
+				// Base: $50 = 50 points, Tier: 1.5x = 75, Campaign: 2.0x bonus = 50, Total: 125
+				expected := &loyaltyv1.EarnPointsResponse{
+					Transaction: &loyaltyv1.PointTransaction{
+						Id:            resp.Transaction.Id,
+						CustomerId:    customerID,
+						Amount:        125, // 50 base * 1.5 tier + 50 campaign bonus
+						Type:          loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN,
+						ReferenceId:   "order-gold-001",
+						ReferenceType: "ORDER",
+						Description:   "Gold tier purchase",
+						CampaignId:    resp.Transaction.CampaignId,
+						CreatedAt:     resp.Transaction.CreatedAt,
+						ExpiresAt:     resp.Transaction.ExpiresAt,
+					},
+					NewBalance:      resp.NewBalance, // Calculated field
+					CampaignApplied: resp.CampaignApplied, // Campaign info
+				}
+				
+				// Compare using protocmp (MANDATORY)
+				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
+					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
@@ -175,12 +191,31 @@ func TestEarnPoints(t *testing.T) {
 			},
 			expectedStatus: http.StatusCreated,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
-				// Should return existing transaction (30 points, not recalculated)
-				if resp.Transaction.Amount != 30 {
-					t.Errorf("Expected existing transaction with 30 points, got %d", resp.Transaction.Amount)
+				if resp.Transaction == nil {
+					t.Fatal("Expected transaction in response")
 				}
-				if resp.Transaction.ReferenceId != "order-idempotent-123" {
-					t.Errorf("Expected reference_id preserved")
+				
+				// Build expected - should return existing transaction (30 points, not recalculated)
+				expected := &loyaltyv1.EarnPointsResponse{
+					Transaction: &loyaltyv1.PointTransaction{
+						Id:            resp.Transaction.Id, // Existing transaction ID
+						CustomerId:    customerID,
+						Amount:        30, // Existing amount (not recalculated from 3000 cents)
+						Type:          loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN,
+						ReferenceId:   "order-idempotent-123", // Same reference_id
+						ReferenceType: resp.Transaction.ReferenceType,
+						Description:   "Idempotent test",
+						CampaignId:    resp.Transaction.CampaignId,
+						CreatedAt:     resp.Transaction.CreatedAt,
+						ExpiresAt:     resp.Transaction.ExpiresAt,
+					},
+					NewBalance:      resp.NewBalance,
+					CampaignApplied: resp.CampaignApplied,
+				}
+				
+				// Compare using protocmp (MANDATORY)
+				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
+					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
@@ -284,9 +319,31 @@ func TestEarnPoints(t *testing.T) {
 			},
 			expectedStatus: http.StatusCreated, // Should handle safely with parameterized queries
 			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
-				// Verify reference_id stored as-is (not executed as SQL)
-				if resp.Transaction.ReferenceId != "'; DROP TABLE point_transactions; --" {
-					t.Error("Reference ID should be stored safely")
+				if resp.Transaction == nil {
+					t.Fatal("Expected transaction in response")
+				}
+				
+				// Build expected - verify SQL injection string stored safely
+				expected := &loyaltyv1.EarnPointsResponse{
+					Transaction: &loyaltyv1.PointTransaction{
+						Id:            resp.Transaction.Id,
+						CustomerId:    customerID,
+						Amount:        resp.Transaction.Amount, // Calculated amount
+						Type:          loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN,
+						ReferenceId:   "'; DROP TABLE point_transactions; --", // SQL string stored safely
+						ReferenceType: "ORDER",
+						Description:   "SQL injection test",
+						CampaignId:    resp.Transaction.CampaignId,
+						CreatedAt:     resp.Transaction.CreatedAt,
+						ExpiresAt:     resp.Transaction.ExpiresAt,
+					},
+					NewBalance:      resp.NewBalance,
+					CampaignApplied: resp.CampaignApplied,
+				}
+				
+				// Compare using protocmp (MANDATORY)
+				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
+					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
@@ -308,10 +365,24 @@ func TestEarnPoints(t *testing.T) {
 			},
 			expectedStatus: http.StatusCreated,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
-				// Should calculate correctly without overflow
-				// Max int64 cents / 100 = huge points but valid
+				if resp.Transaction == nil {
+					t.Fatal("Expected transaction in response")
+				}
+				
+				// Verify overflow handled correctly (amount should be positive and large)
+				// Max int64 cents / 100 = huge points but valid calculation
+				// With campaign (2.0x), could be even larger, so just verify positive and reasonable
+				
 				if resp.Transaction.Amount <= 0 {
-					t.Error("Expected positive points for large amount")
+					t.Errorf("Expected positive points for large amount, got %d", resp.Transaction.Amount)
+				}
+				
+				// Verify other fields match request
+				if resp.Transaction.ReferenceId != "order-large" {
+					t.Errorf("Expected reference_id 'order-large', got %s", resp.Transaction.ReferenceId)
+				}
+				if resp.Transaction.Type != loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN {
+					t.Error("Expected EARN transaction type")
 				}
 			},
 		},

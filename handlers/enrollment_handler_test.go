@@ -429,21 +429,41 @@ func TestListTiers(t *testing.T) {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	// Verify we got 3 tiers
-	if len(resp.Tiers) != 3 {
-		t.Errorf("Expected 3 tiers, got %d", len(resp.Tiers))
+	// Build expected response from FIXTURE data
+	expected := &loyaltyv1.ListTiersResponse{
+		Tiers: []*loyaltyv1.Tier{
+			{
+				Id:                  resp.Tiers[0].Id, // Use from response
+				Name:                "Base",
+				Level:               0,
+				QualificationPoints: 0,
+				EvaluationDays:      365,
+				EarnRateMultiplier:  1.0,
+				Description:         resp.Tiers[0].Description,
+			},
+			{
+				Id:                  resp.Tiers[1].Id,
+				Name:                "Silver",
+				Level:               1,
+				QualificationPoints: 500,
+				EvaluationDays:      365,
+				EarnRateMultiplier:  1.25,
+				Description:         resp.Tiers[1].Description,
+			},
+			{
+				Id:                  resp.Tiers[2].Id,
+				Name:                "Gold",
+				Level:               2,
+				QualificationPoints: 1000,
+				EvaluationDays:      365,
+				EarnRateMultiplier:  1.5,
+				Description:         resp.Tiers[2].Description,
+			},
+		},
 	}
 
-	// Verify ordered by level ASC
-	if len(resp.Tiers) == 3 {
-		if resp.Tiers[0].Level != 0 || resp.Tiers[0].Name != "Base" {
-			t.Errorf("Expected first tier Base(0), got %s(%d)", resp.Tiers[0].Name, resp.Tiers[0].Level)
-		}
-		if resp.Tiers[1].Level != 1 || resp.Tiers[1].Name != "Silver" {
-			t.Errorf("Expected second tier Silver(1), got %s(%d)", resp.Tiers[1].Name, resp.Tiers[1].Level)
-		}
-		if resp.Tiers[2].Level != 2 || resp.Tiers[2].Name != "Gold" {
-			t.Errorf("Expected third tier Gold(2), got %s(%d)", resp.Tiers[2].Name, resp.Tiers[2].Level)
-		}
+	// Compare using protocmp (MANDATORY per constitution)
+	if diff := cmp.Diff(expected, &resp, protocmp.Transform()); diff != "" {
+		t.Errorf("Response mismatch (-want +got):\n%s", diff)
 	}
 }
