@@ -61,20 +61,19 @@ func TestListRewards(t *testing.T) {
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.ListRewardsResponse) {
-				// Debug: print what we got
-				t.Logf("Got %d rewards:", len(resp.Rewards))
-				for _, r := range resp.Rewards {
-					t.Logf("  - %s: active=%v, cost=%d", r.Name, r.IsActive, r.PointCost)
-				}
-				
-				// Should return active rewards (all test rewards are active)
-				if len(resp.Rewards) < 2 {
-					t.Errorf("Expected at least 2 rewards, got %d", len(resp.Rewards))
+				// Should return only 2 active rewards (default active_only=true)
+				// Free Coffee (100) and $5 Discount (500) are active
+				// Inactive Reward (200) should be filtered out
+				if len(resp.Rewards) != 2 {
+					t.Errorf("Expected 2 active rewards, got %d", len(resp.Rewards))
+					for _, r := range resp.Rewards {
+						t.Logf("  - %s: active=%v, cost=%d", r.Name, r.IsActive, r.PointCost)
+					}
 				}
 				// Verify all returned rewards are active
 				for _, reward := range resp.Rewards {
 					if !reward.IsActive {
-						t.Error("Expected only active rewards")
+						t.Errorf("Reward %s should be active but is not", reward.Name)
 					}
 				}
 			},
@@ -84,16 +83,25 @@ func TestListRewards(t *testing.T) {
 			queryParams:    "?active_only=false",
 			expectedStatus: http.StatusOK,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.ListRewardsResponse) {
-				// Debug: print what we got
-				t.Logf("Got %d rewards with active_only=false:", len(resp.Rewards))
-				for _, r := range resp.Rewards {
-					t.Logf("  - %s: active=%v, cost=%d", r.Name, r.IsActive, r.PointCost)
+				// Should return all 3 rewards (2 active + 1 inactive) when active_only=false
+				if len(resp.Rewards) != 3 {
+					t.Errorf("Expected 3 total rewards, got %d", len(resp.Rewards))
+					for _, r := range resp.Rewards {
+						t.Logf("  - %s: active=%v, cost=%d", r.Name, r.IsActive, r.PointCost)
+					}
 				}
-				
-				// Should return all rewards (active_only=false means no filter)
-				// Note: Database default makes all rewards active, so we get same as active_only=true
-				if len(resp.Rewards) < 2 {
-					t.Errorf("Expected at least 2 rewards, got %d", len(resp.Rewards))
+				// Verify we have mix of active and inactive
+				hasActive := false
+				hasInactive := false
+				for _, r := range resp.Rewards {
+					if r.IsActive {
+						hasActive = true
+					} else {
+						hasInactive = true
+					}
+				}
+				if !hasActive || !hasInactive {
+					t.Error("Expected mix of active and inactive rewards when active_only=false")
 				}
 			},
 		},
@@ -102,15 +110,23 @@ func TestListRewards(t *testing.T) {
 			queryParams:    "?max_points=200",
 			expectedStatus: http.StatusOK,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.ListRewardsResponse) {
-				// Should return only rewards with point_cost <= 200
-				// We have: Coffee (100 ✓), Inactive Reward (200 ✓), Discount (500 ✗)
-				if len(resp.Rewards) < 1 {
-					t.Errorf("Expected at least 1 reward under 200 points, got %d", len(resp.Rewards))
+				// Should return only ACTIVE rewards with point_cost <= 200
+				// Coffee (100, active) ✓
+				// Discount (500, active) ✗ (over budget)
+				// Inactive Reward (200, inactive) ✗ (not active by default)
+				if len(resp.Rewards) != 1 {
+					t.Errorf("Expected 1 active reward under 200 points, got %d", len(resp.Rewards))
+					for _, r := range resp.Rewards {
+						t.Logf("  - %s: active=%v, cost=%d", r.Name, r.IsActive, r.PointCost)
+					}
 				}
-				// Verify all returned rewards are within budget
+				// Verify all returned rewards are within budget and active
 				for _, reward := range resp.Rewards {
 					if reward.PointCost > 200 {
 						t.Errorf("Reward %s has cost %d > 200", reward.Name, reward.PointCost)
+					}
+					if !reward.IsActive {
+						t.Error("Expected only active rewards by default")
 					}
 				}
 			},
@@ -172,6 +188,13 @@ func TestRedeemReward(t *testing.T) {
 		"is_active":  true,
 	})
 
+	// Create inactive reward for test case
+	inactiveReward := testutil.CreateTestReward(db, map[string]interface{}{
+		"name":       "Inactive Reward for Test",
+		"type":       models.RewardTypeDiscount,
+		"point_cost": int64(100),
+		"is_active":  false, // Now works properly after model fix
+	})
 
 	// Table-driven test cases
 	testCases := []struct {
@@ -275,6 +298,22 @@ func TestRedeemReward(t *testing.T) {
 			},
 			expectedStatus: http.StatusNotFound,
 			expectedError:  "REWARD_NOT_FOUND",
+		},
+		{
+			name:      "Edge case: Reward inactive",
+			accountID: "user-redeem-inactive",
+			request: &loyaltyv1.RedeemRewardRequest{
+				RewardId: inactiveReward.ID, // Use inactive reward created above
+			},
+			setupFixtures: func() {
+				testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id":      "user-redeem-inactive",
+					"current_balance": int64(1000),
+					"tier_id":         &baseTier.ID,
+				})
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "REWARD_INACTIVE",
 		},
 		{
 			name:      "Edge case: Customer not enrolled",
