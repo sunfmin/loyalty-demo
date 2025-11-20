@@ -12,8 +12,10 @@ import (
 	"time"
 	
 	"github.com/opentracing/opentracing-go"
+	"github.com/yourorg/loyalty-demo/handlers"
 	"github.com/yourorg/loyalty-demo/internal/config"
 	"github.com/yourorg/loyalty-demo/internal/middleware"
+	"github.com/yourorg/loyalty-demo/services"
 )
 
 func main() {
@@ -23,11 +25,36 @@ func main() {
 	// Initialize NoopTracer for development (production will use Jaeger/Zipkin)
 	opentracing.SetGlobalTracer(opentracing.NoopTracer{})
 	
+	// Connect to database
+	dbConfig := config.LoadDatabaseConfig()
+	db, err := config.NewDatabaseConnection(dbConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	
+	// Run migrations
+	if err := services.AutoMigrate(db); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+	
+	log.Println("Database connection established and migrations complete")
+	
+	// Create services
+	loyaltyService := services.NewLoyaltyService(db)
+	
+	// Create handlers
+	enrollmentHandler := handlers.NewEnrollmentHandler(loyaltyService)
+	
 	// Create HTTP multiplexer
 	mux := http.NewServeMux()
 	
 	// Register health check endpoint (no auth required)
 	mux.HandleFunc("/health", healthCheckHandler)
+	
+	// Register loyalty endpoints (with auth middleware)
+	mux.Handle("/v1/loyalty/enroll", middleware.Authentication(http.HandlerFunc(enrollmentHandler.HandleEnroll)))
+	mux.Handle("/v1/loyalty/me", middleware.Authentication(http.HandlerFunc(enrollmentHandler.HandleGetStatus)))
+	mux.HandleFunc("/v1/loyalty/tiers", enrollmentHandler.HandleListTiers) // Public endpoint
 	
 	// Apply middleware chain
 	// Order: Recovery → Logging → Tracing → CORS

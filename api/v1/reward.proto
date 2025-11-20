@@ -6,6 +6,7 @@ option go_package = "github.com/yourorg/loyalty-demo/api/gen/loyalty/v1;loyaltyv
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
+import "api/v1/transaction.proto";
 
 // Reward types
 
@@ -70,16 +71,7 @@ message RedeemRewardRequest {
 message RedeemRewardResponse {
   Redemption redemption = 1;
   int64 new_balance = 2;
-  PointTransaction transaction = 3;  // Defined in transaction.proto
-}
-
-// Transaction reference for redemption
-message PointTransaction {
-  string id = 1;
-  int64 amount = 2;
-  string type = 3;
-  string description = 4;
-  google.protobuf.Timestamp created_at = 5;
+  PointTransaction transaction = 3;  // From transaction.proto
 }
 
 // List redemptions

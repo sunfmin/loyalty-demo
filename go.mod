@@ -3,6 +3,7 @@ module github.com/yourorg/loyalty-demo
 go 1.25.1
 
 require (
+	github.com/google/go-cmp v0.7.0
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
