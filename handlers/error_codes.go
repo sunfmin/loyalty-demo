@@ -20,49 +20,57 @@ type ErrorCode struct {
 // Errors is a singleton instance with all HTTP error definitions
 var Errors = struct {
 	// Validation errors (400)
-	InvalidRequest   ErrorCode
-	ValidationFailed ErrorCode
-	MissingRequired  ErrorCode
-	ValueOutOfRange  ErrorCode
-	InvalidType      ErrorCode
+	InvalidRequest      ErrorCode
+	ValidationFailed    ErrorCode
+	MissingRequired     ErrorCode
+	ValueOutOfRange     ErrorCode
+	InvalidType         ErrorCode
 	InsufficientBalance ErrorCode
+	InvalidReferralCode ErrorCode
+	InvalidAmount       ErrorCode
+	InvalidDateRange    ErrorCode
+	RewardInactive      ErrorCode
 	
 	// Not found errors (404)
-	CustomerNotFound  ErrorCode
-	RewardNotFound    ErrorCode
+	CustomerNotFound   ErrorCode
+	RewardNotFound     ErrorCode
 	RedemptionNotFound ErrorCode
-	CampaignNotFound  ErrorCode
-	TemplateNotFound  ErrorCode
+	CampaignNotFound   ErrorCode
+	TemplateNotFound   ErrorCode
 	
 	// Conflict errors (409)
-	AlreadyEnrolled  ErrorCode
+	AlreadyEnrolled           ErrorCode
 	RedemptionAlreadyReversed ErrorCode
-	AlreadyExists    ErrorCode
+	AlreadyExists             ErrorCode
 	
 	// Internal errors (500)
 	InternalError ErrorCode
 }{
 	// Validation errors - mapped to service errors
-	InvalidRequest:   ErrorCode{"INVALID_REQUEST", "Invalid request body", http.StatusBadRequest, services.ErrInvalidRequest},
-	MissingRequired:  ErrorCode{"MISSING_REQUIRED", "Required field missing", http.StatusBadRequest, services.ErrMissingRequired},
-	ValueOutOfRange:  ErrorCode{"VALUE_OUT_OF_RANGE", "Value out of range", http.StatusBadRequest, services.ErrValueOutOfRange},
-	InvalidType:      ErrorCode{"INVALID_TYPE", "Invalid type", http.StatusBadRequest, services.ErrInvalidType},
+	InvalidRequest:      ErrorCode{"INVALID_REQUEST", "Invalid request body", http.StatusBadRequest, services.ErrInvalidRequest},
+	MissingRequired:     ErrorCode{"MISSING_REQUIRED", "Required field missing", http.StatusBadRequest, services.ErrMissingRequired},
+	ValueOutOfRange:     ErrorCode{"VALUE_OUT_OF_RANGE", "Value out of range", http.StatusBadRequest, services.ErrValueOutOfRange},
+	InvalidType:         ErrorCode{"INVALID_TYPE", "Invalid type", http.StatusBadRequest, services.ErrInvalidType},
 	InsufficientBalance: ErrorCode{"INSUFFICIENT_BALANCE", "Insufficient point balance", http.StatusBadRequest, services.ErrInsufficientBalance},
+	InvalidReferralCode: ErrorCode{"INVALID_REFERRAL_CODE", "Invalid referral code", http.StatusBadRequest, services.ErrInvalidReferralCode},
+	InvalidAmount:       ErrorCode{"INVALID_AMOUNT", "Invalid amount", http.StatusBadRequest, services.ErrInvalidAmount},
+	InvalidDateRange:    ErrorCode{"INVALID_DATE_RANGE", "Invalid date range", http.StatusBadRequest, services.ErrInvalidDateRange},
+	RewardInactive:      ErrorCode{"REWARD_INACTIVE", "Reward is not active", http.StatusBadRequest, services.ErrRewardInactive},
 	
 	// Not found errors - mapped to service errors
-	CustomerNotFound:  ErrorCode{"CUSTOMER_NOT_FOUND", "Customer not enrolled", http.StatusNotFound, services.ErrNotEnrolled},
-	RewardNotFound:    ErrorCode{"REWARD_NOT_FOUND", "Reward not found", http.StatusNotFound, services.ErrRewardNotFound},
+	CustomerNotFound:   ErrorCode{"CUSTOMER_NOT_FOUND", "Customer not enrolled", http.StatusNotFound, services.ErrNotEnrolled},
+	RewardNotFound:     ErrorCode{"REWARD_NOT_FOUND", "Reward not found", http.StatusNotFound, services.ErrRewardNotFound},
 	RedemptionNotFound: ErrorCode{"REDEMPTION_NOT_FOUND", "Redemption not found", http.StatusNotFound, services.ErrRedemptionNotFound},
-	CampaignNotFound:  ErrorCode{"CAMPAIGN_NOT_FOUND", "Campaign not found", http.StatusNotFound, services.ErrCampaignNotFound},
-	TemplateNotFound:  ErrorCode{"TEMPLATE_NOT_FOUND", "Template not found", http.StatusNotFound, services.ErrTemplateNotFound},
+	CampaignNotFound:   ErrorCode{"CAMPAIGN_NOT_FOUND", "Campaign not found", http.StatusNotFound, services.ErrCampaignNotFound},
+	TemplateNotFound:   ErrorCode{"TEMPLATE_NOT_FOUND", "Template not found", http.StatusNotFound, services.ErrTemplateNotFound},
 	
 	// Conflict errors - mapped to service errors
-	AlreadyEnrolled:  ErrorCode{"ALREADY_ENROLLED", "Customer already enrolled", http.StatusConflict, services.ErrAlreadyEnrolled},
+	AlreadyEnrolled:           ErrorCode{"ALREADY_ENROLLED", "Customer already enrolled", http.StatusConflict, services.ErrAlreadyEnrolled},
 	RedemptionAlreadyReversed: ErrorCode{"REDEMPTION_ALREADY_REVERSED", "Redemption already reversed", http.StatusConflict, services.ErrRedemptionAlreadyReversed},
-	AlreadyExists:    ErrorCode{"ALREADY_EXISTS", "Resource already exists", http.StatusConflict, services.ErrAlreadyExists},
+	AlreadyExists:             ErrorCode{"ALREADY_EXISTS", "Resource already exists", http.StatusConflict, services.ErrAlreadyExists},
 	
 	// Internal errors - no mapping (catch-all)
-	InternalError:    ErrorCode{"INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError, nil},
+	InternalError: ErrorCode{"INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError, nil},
 }
 
 // AllErrors returns a slice of all error codes for iteration
@@ -73,6 +81,10 @@ func AllErrors() []ErrorCode {
 		Errors.ValueOutOfRange,
 		Errors.InvalidType,
 		Errors.InsufficientBalance,
+		Errors.InvalidReferralCode,
+		Errors.InvalidAmount,
+		Errors.InvalidDateRange,
+		Errors.RewardInactive,
 		Errors.CustomerNotFound,
 		Errors.RewardNotFound,
 		Errors.RedemptionNotFound,

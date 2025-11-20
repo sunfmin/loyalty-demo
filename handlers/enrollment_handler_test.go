@@ -152,7 +152,7 @@ func TestEnrollCustomer(t *testing.T) {
 			},
 			setupFixtures:  func() {},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "INVALID_REQUEST",
+			expectedError:  "INVALID_REFERRAL_CODE",
 		},
 		{
 			name:           "Edge case: Missing authentication",
@@ -169,7 +169,7 @@ func TestEnrollCustomer(t *testing.T) {
 			},
 			setupFixtures:  func() {},
 			expectedStatus: http.StatusBadRequest, // Invalid referral code
-			expectedError:  "INVALID_REQUEST",
+			expectedError:  "INVALID_REFERRAL_CODE",
 		},
 		{
 			name:      "Edge case: XSS payload in referral code",
@@ -179,7 +179,7 @@ func TestEnrollCustomer(t *testing.T) {
 			},
 			setupFixtures:  func() {},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "INVALID_REQUEST",
+			expectedError:  "INVALID_REFERRAL_CODE",
 		},
 	}
 

@@ -36,7 +36,9 @@ func (h *EnrollmentHandler) HandleEnroll(w http.ResponseWriter, r *http.Request)
 	accountID, ok := middleware.GetUserID(ctx)
 	if !ok {
 		ext.Error.Set(span, true)
-		HandleServiceError(w, services.ErrMissingRequired)
+		ext.HTTPStatusCode.Set(span, uint16(http.StatusUnauthorized))
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Unauthorized - missing user authentication"}`))
 		return
 	}
 
@@ -83,7 +85,9 @@ func (h *EnrollmentHandler) HandleGetStatus(w http.ResponseWriter, r *http.Reque
 	accountID, ok := middleware.GetUserID(ctx)
 	if !ok {
 		ext.Error.Set(span, true)
-		HandleServiceError(w, services.ErrMissingRequired)
+		ext.HTTPStatusCode.Set(span, uint16(http.StatusUnauthorized))
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Unauthorized - missing user authentication"}`))
 		return
 	}
 
