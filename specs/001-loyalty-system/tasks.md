@@ -2,8 +2,11 @@
 
 **Input**: Design documents from `/specs/001-loyalty-system/`
 **Prerequisites**: plan.md (tech stack), spec.md (user stories), research.md (decisions), data-model.md (entities), contracts/ (API specs)
+**Constitution**: Version 1.1.0 (with Principle XI: Continuous Test Verification)
 
 **Tests**: Integration tests are MANDATORY per constitution. All tests use real PostgreSQL database via testcontainers-go (no mocking), follow table-driven patterns, use GORM for fixtures, use protobuf structs (NOT maps), verify OpenTracing instrumentation, and cover comprehensive edge cases. Tests are conducted at HTTP layer only (httptest), which exercises the full stack: HTTP → Service → Repository → Database.
+
+**⚠️ CRITICAL - Principle XI: Continuous Test Verification**: Tests MUST be run after EVERY code change. Tasks are NOT complete until tests pass. Run `go test -v ./...` after each implementation task and fix failures immediately before proceeding.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -255,7 +258,16 @@
   - Verify OpenTracing spans created
   - Fix any failures before proceeding
 
+- [ ] T046a [US1] Verify continuous test compliance (Principle XI)
+  - Execute full test suite: `go test -v ./...`
+  - Execute with race detector: `go test -v -race ./handlers`
+  - Verify build: `go build ./...`
+  - ALL tests MUST pass before proceeding
+  - Fix any failures immediately
+  - Document any flaky tests and fix them (do NOT ignore or skip)
+
 **Checkpoint**: ✅ User Story 1 is complete - customers can enroll and view status independently
+**Test Status**: ✅ All tests pass (Principle XI verified)
 
 ---
 
@@ -356,7 +368,16 @@
   - Verify campaign bonuses applied
   - Verify referral bonuses triggered
 
+- [ ] T053a [US2] Verify continuous test compliance (Principle XI)
+  - Execute full test suite: `go test -v ./...`
+  - Execute with race detector: `go test -v -race ./handlers ./services`
+  - Verify build: `go build ./...`
+  - ALL tests MUST pass before proceeding
+  - Fix any failures immediately
+  - Verify US1 tests still pass (regression check)
+
 **Checkpoint**: User Story 2 is complete - customers can earn points independently
+**Test Status**: All tests pass (Principle XI verified)
 
 ---
 
@@ -434,7 +455,15 @@
   - Verify pagination works correctly
   - Verify performance meets SC-005 (under 2 seconds)
 
+- [ ] T058a [US3] Verify continuous test compliance (Principle XI)
+  - Execute full test suite: `go test -v ./...`
+  - Execute with race detector: `go test -v -race ./handlers ./services`
+  - Verify build: `go build ./...`
+  - ALL tests MUST pass (including US1 and US2 regression)
+  - Fix any failures immediately
+
 **Checkpoint**: User Story 3 is complete - customers can view transaction history independently
+**Test Status**: All tests pass (Principle XI verified)
 
 ---
 
@@ -585,7 +614,15 @@
   - Verify balance management correct
   - Verify transaction atomicity
 
+- [ ] T069a [US4] Verify continuous test compliance (Principle XI)
+  - Execute full test suite: `go test -v ./...`
+  - Execute with race detector: `go test -v -race ./handlers ./services`
+  - Verify build: `go build ./...`
+  - ALL tests MUST pass (including US1, US2, US3 regression)
+  - Fix any failures immediately
+
 **Checkpoint**: User Story 4 is complete - customers can redeem rewards independently
+**Test Status**: All tests pass (Principle XI verified)
 
 ---
 
@@ -678,7 +715,15 @@
   - Verify tier upgrades work automatically
   - Verify tier multipliers applied correctly
 
+- [ ] T079a [US5] Verify continuous test compliance (Principle XI)
+  - Execute full test suite: `go test -v ./...`
+  - Execute with race detector: `go test -v -race ./handlers ./services`
+  - Verify build: `go build ./...`
+  - ALL tests MUST pass (including US1-US4 regression)
+  - Fix any failures immediately
+
 **Checkpoint**: User Story 5 is complete - automatic tier progression works independently
+**Test Status**: All tests pass (Principle XI verified)
 
 ---
 
@@ -888,7 +933,15 @@
   - Verify redemption reversals work correctly
   - Verify analytics queries perform well
 
+- [ ] T099a [US6] Verify continuous test compliance (Principle XI)
+  - Execute full test suite: `go test -v ./...`
+  - Execute with race detector: `go test -v -race ./handlers ./services`
+  - Verify build: `go build ./...`
+  - ALL tests MUST pass (including US1-US5 regression)
+  - Fix any failures immediately
+
 **Checkpoint**: User Story 6 is complete - admin management functionality works independently
+**Test Status**: All tests pass (Principle XI verified)
 
 ---
 
@@ -969,7 +1022,17 @@
   - Document any intentionally untested errors (with justification)
   - Verify 100% error path coverage achieved
 
+- [ ] T105a Verify continuous test compliance (Principle XI)
+  - Execute full test suite: `go test -v ./...`
+  - Execute with race detector: `go test -v -race ./...`
+  - Verify build: `go build ./...`
+  - Run with coverage: `go test -cover ./...`
+  - ALL tests MUST pass (complete regression suite)
+  - Verify no flaky tests (run 3 times if needed)
+  - Fix any failures immediately
+
 **Checkpoint**: All errors tested - ready for code review
+**Test Status**: 100% error coverage + all tests passing (Principle XI verified)
 
 ---
 
@@ -1014,19 +1077,26 @@
   - 100 req/min for customer endpoints
   - 1000 req/min for admin endpoints
 
-- [ ] T112 Verify all integration tests pass
+- [ ] T112 Verify all integration tests pass (Principle XI)
   - Execute: `go test -v ./handlers/...`
   - Execute: `go test -v ./services/...`
+  - Execute with race detector: `go test -v -race ./...`
   - Verify all tests passing
   - Check test coverage: `go test -cover ./...`
+  - Minimum coverage: 80% for handlers and services
+  - ALL tests MUST pass before continuing
 
-- [ ] T113 Verify all error tests pass
+- [ ] T113 Verify all error tests pass (Principle XI)
   - Execute: `go test -v -run "TestAll.*Errors" ./handlers/`
-  - Confirm 100% error coverage
+  - Confirm 100% error coverage (15 sentinel errors + 14 HTTP codes)
+  - Verify every ErrXxx in services/errors.go has passing test
+  - Verify every Errors.Xxx in handlers/error_codes.go has passing test
+  - ALL error tests MUST pass before continuing
 
 - [ ] T114 Run golangci-lint for code quality
   - Execute: `golangci-lint run`
   - Fix any linting issues
+  - Zero linting errors required
 
 - [ ] T115 Performance testing
   - Test SC-002: Point balance updates within 5 seconds
@@ -1050,6 +1120,20 @@
   - Follow quickstart guide from scratch
   - Verify all curl examples work
   - Update any outdated instructions
+
+- [ ] T119 Final comprehensive test verification (Principle XI - MANDATORY)
+  - Execute complete test suite: `go test -v ./...`
+  - Execute with race detector: `go test -v -race ./...`
+  - Execute with coverage: `go test -cover ./...`
+  - Run tests 3 times to check for flakiness
+  - Verify 100% test pass rate across all runs
+  - Verify no skipped tests (all must execute)
+  - Verify test execution time < 5 minutes (flag if longer)
+  - Document final test results in project README
+  - ALL tests MUST pass before feature is considered complete
+
+**Final Checkpoint**: Feature complete with full test verification
+**Constitution Compliance**: ✅ Principle XI satisfied - continuous test verification throughout development
 
 ---
 
@@ -1162,6 +1246,7 @@ With 3 developers after Foundational phase:
 - [Story] label maps task to specific user story (US1, US2, etc.)
 - Each user story should be independently completable and testable
 - **CRITICAL**: Write tests FIRST, ensure they FAIL, then implement
+- **⚠️ PRINCIPLE XI**: Run tests after EVERY code change - tasks NOT complete until tests pass
 - Use real PostgreSQL database for all tests (testcontainers-go)
 - Use protobuf structs (NOT maps) for all API contracts
 - Use `cmp.Diff()` with `protocmp.Transform()` for ALL protobuf assertions
@@ -1170,6 +1255,8 @@ With 3 developers after Foundational phase:
 - All errors MUST be wrapped with `fmt.Errorf("%w", err)` for error chains
 - All error checking MUST use `errors.Is()` and `errors.As()`
 - **ALL sentinel errors and HTTP error codes MUST be tested** (Phase 9)
+- **Run `go test -v ./...` after each implementation task** (Principle XI)
+- **Fix test failures immediately before proceeding** (Principle XI)
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Each user story is a potentially shippable increment
@@ -1178,20 +1265,23 @@ With 3 developers after Foundational phase:
 
 ## Summary
 
-- **Total Tasks**: 118 tasks
+- **Total Tasks**: 125 tasks (updated with Principle XI test verification tasks)
 - **Setup Phase**: 10 tasks (parallel opportunities: 8 tasks)
 - **Foundational Phase**: 26 tasks (BLOCKING - must complete before user stories)
-- **User Story 1 (Enrollment)**: 10 tasks (P1 - MVP critical)
-- **User Story 2 (Earn Points)**: 7 tasks (P1 - MVP critical)
-- **User Story 3 (View History)**: 5 tasks (P2)
-- **User Story 4 (Redeem Rewards)**: 11 tasks (P2)
-- **User Story 5 (Tiers)**: 10 tasks (P3)
-- **User Story 6 (Admin)**: 20 tasks (P3)
-- **Error Testing Phase**: 6 tasks (MANDATORY before complete)
-- **Polish Phase**: 13 tasks (cross-cutting improvements)
+- **User Story 1 (Enrollment)**: 11 tasks (P1 - MVP critical) [includes T046a test verification]
+- **User Story 2 (Earn Points)**: 8 tasks (P1 - MVP critical) [includes T053a test verification]
+- **User Story 3 (View History)**: 6 tasks (P2) [includes T058a test verification]
+- **User Story 4 (Redeem Rewards)**: 12 tasks (P2) [includes T069a test verification]
+- **User Story 5 (Tiers)**: 11 tasks (P3) [includes T079a test verification]
+- **User Story 6 (Admin)**: 21 tasks (P3) [includes T099a test verification]
+- **Error Testing Phase**: 7 tasks (MANDATORY) [includes T105a test verification]
+- **Polish Phase**: 14 tasks [includes T119 final test verification]
 
-**MVP Scope**: User Stories 1 + 2 (27 tasks after Foundational) - Enrollment and point earning
-**Full Feature**: All user stories (89 tasks after Foundational)
+**Constitution**: Version 1.1.0 with Principle XI (Continuous Test Verification)
+**Test Verification Tasks**: 7 new tasks (T046a, T053a, T058a, T069a, T079a, T105a, T119)
+
+**MVP Scope**: User Stories 1 + 2 (28 tasks after Foundational) - Enrollment and point earning
+**Full Feature**: All user stories (96 tasks after Foundational)
 
 **Parallel Opportunities**: Foundational phase has 15+ parallelizable tasks. After Foundational, US1 and US2 can be developed in parallel, followed by US3/US4/US5 in parallel.
 
@@ -1204,4 +1294,38 @@ With 3 developers after Foundational phase:
 - US6: Admin creates campaign → campaign applies to purchases → analytics shows metrics
 
 **Constitutional Compliance**: All tasks follow TDD approach with integration tests first, use real PostgreSQL, protobuf contracts, service layer architecture, comprehensive error handling, and OpenTracing instrumentation.
+
+**Principle XI - Continuous Test Verification**: After EVERY implementation task, run `go test -v ./...` and verify all tests pass before proceeding. This is NON-NEGOTIABLE - tasks are incomplete if tests fail. Test verification tasks (T046a, T053a, T058a, T069a, T079a, T099a, T105a, T119) enforce this discipline at checkpoints.
+
+## Test Verification Workflow (Principle XI)
+
+**After Each Implementation Task**:
+1. Run tests: `go test -v ./...`
+2. Check for failures
+3. If failures exist: FIX IMMEDIATELY (do not proceed)
+4. If all pass: Proceed to next task
+5. Commit after verification passes
+
+**At Each Checkpoint** (end of user story):
+1. Run full test suite: `go test -v ./...`
+2. Run with race detector: `go test -v -race ./...`
+3. Verify build: `go build ./...`
+4. Check coverage: `go test -cover ./...`
+5. Run regression checks (verify previous stories still pass)
+6. Document test results
+7. ALL tests MUST pass before marking story complete
+
+**Before Feature Complete**:
+1. Execute comprehensive test suite (T119)
+2. Run tests 3 times to check for flakiness
+3. Verify 100% pass rate
+4. Verify no skipped tests
+5. Document final test status
+
+**Failure Handling**:
+- Flaky tests MUST be fixed (not ignored or re-run)
+- Test failures BLOCK all subsequent work
+- Debug and fix immediately
+- Re-run tests to verify fix
+- Only proceed after clean test run
 
