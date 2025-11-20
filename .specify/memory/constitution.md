@@ -17,25 +17,24 @@ Removed Sections:
 - None
 
 Templates Requiring Updates:
-- ⏳ tasks-template.md - Should add root cause tracing guidance in troubleshooting sections
-- ⏳ Code review checklist - Should verify fixes address root causes, not symptoms
-- ✅ constitution.md - Updated with Principle XII
+- ✅ tasks-template.md - UPDATED (added root cause tracing troubleshooting section with examples and methodology)
+- ✅ checklist-template.md - UPDATED (added 12-item Root Cause Tracing checklist section)
+- ✅ constitution.md - UPDATED (added Principle XII with complete guidance)
 
 Documentation Updates:
-- ⏳ README.md - Should update to version 1.2.0, add Principle XII
+- ✅ README.md - CREATED (version 1.2.0, includes all 12 principles, root cause tracing guidance)
 
 Real-World Application (Demonstrated):
 - Problem: Inactive rewards showing as active in database despite IsActive: false in Go
 - Symptom Fix Attempted: Removed test case, weakened expectations (REJECTED per new principle)
 - Root Cause Traced: GORM model had `default:true` → PostgreSQL overrode struct value
-- Proper Fix Applied: Removed `default:true` from model definition
+- Proper Fix Applied: Removed `default:true` from model definition (internal/models/reward.go line 23)
 - Result: All tests pass with proper expectations, inactive rewards work correctly
-- File Fixed: internal/models/reward.go line 23
+- Tests Verified: 39/39 passing (100% pass rate)
+- Documentation: ROOT_CAUSE_FIX_REPORT.md created with complete analysis
 
 Follow-up TODOs:
-- Update tasks-template.md with root cause tracing guidance
-- Update README.md with new version and principle
-- Add debugging discipline to code review checklist
+- None - all dependent artifacts updated
 
 Change Type: MINOR (new principle added)
 Rationale: Adding root cause tracing as a non-negotiable principle ensures problems are fixed properly
