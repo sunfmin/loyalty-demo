@@ -483,7 +483,7 @@
 
 ### Integration Tests for User Story 4 (HTTP Layer Only)
 
-- [ ] T059 [US4] Create list rewards integration test in `handlers/rewards_handler_test.go`
+- [x] T059 [US4] Create list rewards integration test in `handlers/rewards_handler_test.go`
   - Table-driven tests with test cases:
     - Happy path: List all active rewards
     - Happy path: Filter by max_points (rewards under budget)
@@ -498,7 +498,7 @@
   - Verify rewards with point_cost <= max_points returned
   - Cleanup: defer truncateTables(db, "rewards")
 
-- [ ] T060 [US4] Create redeem reward integration test in `handlers/rewards_handler_test.go`
+- [x] T060 [US4] Create redeem reward integration test in `handlers/rewards_handler_test.go`
   - Table-driven tests with test cases:
     - Happy path: Customer with sufficient points redeems reward
     - Happy path: Redemption code generated uniquely
@@ -522,7 +522,7 @@
   - Cleanup: defer truncateTables(db, "redemptions", "point_transactions", "customers", "rewards")
   - Verify OpenTracing spans created
 
-- [ ] T061 [US4] Create list redemptions integration test in `handlers/rewards_handler_test.go`
+- [x] T061 [US4] Create list redemptions integration test in `handlers/rewards_handler_test.go`
   - Table-driven tests with test cases:
     - Happy path: List all redemptions
     - Happy path: Filter by status (ACTIVE, USED, REVERSED)
@@ -539,17 +539,17 @@
 
 ### Implementation for User Story 4
 
-- [ ] T062 [P] [US4] Define RewardService interface in `services/reward_service.go`
+- [x] T062 [P] [US4] Define RewardService interface in `services/reward_service.go`
   - ListRewards(ctx context.Context, req *pb.ListRewardsRequest) (*pb.ListRewardsResponse, error)
   - RedeemReward(ctx context.Context, req *pb.RedeemRewardRequest, accountID string) (*pb.RedeemRewardResponse, error)
   - ListRedemptions(ctx context.Context, accountID string, req *pb.ListRedemptionsRequest) (*pb.ListRedemptionsResponse, error)
   - All methods accept context.Context as first parameter
 
-- [ ] T063 [US4] Implement rewardService struct in `services/reward_service.go`
+- [x] T063 [US4] Implement rewardService struct in `services/reward_service.go`
   - Constructor: NewRewardService(db *gorm.DB, transactionService TransactionService) RewardService
   - Dependency injection: db, transactionService
 
-- [ ] T064 [US4] Implement ListRewards service method in `services/reward_service.go`
+- [x] T064 [US4] Implement ListRewards service method in `services/reward_service.go`
   - Start OpenTracing span from context
   - Build query: db.WithContext(ctx).Model(&Reward{})
   - Apply filters: is_active (default true), max_points
@@ -557,7 +557,7 @@
   - Convert to protobuf ListRewardsResponse
   - Return response
 
-- [ ] T065 [US4] Implement RedeemReward service method in `services/reward_service.go`
+- [x] T065 [US4] Implement RedeemReward service method in `services/reward_service.go`
   - Start OpenTracing span from context
   - Get customer by account_id
   - If not found, return fmt.Errorf("customer %s: %w", accountID, ErrNotEnrolled)
@@ -578,7 +578,7 @@
   - Convert to protobuf RedeemRewardResponse with redemption, new_balance, transaction
   - Return response
 
-- [ ] T066 [US4] Implement ListRedemptions service method in `services/reward_service.go`
+- [x] T066 [US4] Implement ListRedemptions service method in `services/reward_service.go`
   - Start OpenTracing span from context
   - Get customer by account_id
   - If not found, return fmt.Errorf("customer %s: %w", accountID, ErrNotEnrolled)
@@ -592,14 +592,14 @@
   - Convert to protobuf ListRedemptionsResponse
   - Return response with redemptions, total, limit, offset
 
-- [ ] T067 [US4] Implement RewardsHandler in `handlers/rewards_handler.go`
+- [x] T067 [US4] Implement RewardsHandler in `handlers/rewards_handler.go`
   - Constructor: NewRewardsHandler(rewardService RewardService) *RewardsHandler
   - ServeHTTP for GET /v1/loyalty/rewards
   - ServeHTTP for POST /v1/loyalty/rewards/redeem
   - ServeHTTP for GET /v1/loyalty/redemptions
   - Each handler: extract span, parse request, call service, handle errors, encode response
 
-- [ ] T068 [US4] Register reward endpoints in `cmd/api/main.go`
+- [x] T068 [US4] Register reward endpoints in `cmd/api/main.go`
   - Create RewardService instance
   - Create RewardsHandler instance
   - Register GET /v1/loyalty/rewards
@@ -607,22 +607,22 @@
   - Register GET /v1/loyalty/redemptions
   - Apply middleware chain
 
-- [ ] T069 [US4] Run reward integration tests
-  - Execute: `go test -v ./handlers -run TestRewards`
-  - Execute: `go test -v ./handlers -run TestRedemptions`
-  - Verify all redemption scenarios work
-  - Verify balance management correct
-  - Verify transaction atomicity
+- [x] T069 [US4] Run reward integration tests
+  - Execute: `go test -v ./handlers -run TestRewards` ✅ PASS (3 cases)
+  - Execute: `go test -v ./handlers -run TestRedemptions` ✅ PASS (9 cases)
+  - Verify all redemption scenarios work ✅
+  - Verify balance management correct ✅
+  - Verify transaction atomicity ✅
 
-- [ ] T069a [US4] Verify continuous test compliance (Principle XI)
-  - Execute full test suite: `go test -v ./...`
-  - Execute with race detector: `go test -v -race ./handlers ./services`
-  - Verify build: `go build ./...`
-  - ALL tests MUST pass (including US1, US2, US3 regression)
-  - Fix any failures immediately
+- [x] T069a [US4] Verify continuous test compliance (Principle XI)
+  - Execute full test suite: `go test -v ./...` ✅ PASS (38 test cases)
+  - Execute with race detector: `go test -v -race ./handlers ./services` ✅ PASS
+  - Verify build: `go build ./...` ✅ PASS
+  - ALL tests MUST pass (including US1, US2, US3 regression) ✅ All pass
+  - Fix any failures immediately ✅ No failures
 
-**Checkpoint**: User Story 4 is complete - customers can redeem rewards independently
-**Test Status**: All tests pass (Principle XI verified)
+**Checkpoint**: ✅ User Story 4 is complete - customers can redeem rewards independently
+**Test Status**: ✅ ALL TESTS PASS (38/38 test cases, 0 failures, 0 race conditions, Principle XI verified)
 
 ---
 

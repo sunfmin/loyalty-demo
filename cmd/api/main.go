@@ -42,10 +42,12 @@ func main() {
 	// Create services
 	loyaltyService := services.NewLoyaltyService(db)
 	transactionService := services.NewTransactionService(db)
+	rewardService := services.NewRewardService(db, transactionService)
 	
 	// Create handlers
 	enrollmentHandler := handlers.NewEnrollmentHandler(loyaltyService)
 	pointsHandler := handlers.NewPointsHandler(transactionService)
+	rewardsHandler := handlers.NewRewardsHandler(rewardService)
 	
 	// Create HTTP multiplexer
 	mux := http.NewServeMux()
@@ -61,6 +63,11 @@ func main() {
 	// Register points endpoints (with auth middleware)
 	mux.Handle("/v1/loyalty/points/earn", middleware.Authentication(http.HandlerFunc(pointsHandler.HandleEarnPoints)))
 	mux.Handle("/v1/loyalty/transactions", middleware.Authentication(http.HandlerFunc(pointsHandler.HandleListTransactions)))
+	
+	// Register rewards endpoints
+	mux.HandleFunc("/v1/loyalty/rewards", rewardsHandler.HandleListRewards) // Public catalog
+	mux.Handle("/v1/loyalty/rewards/redeem", middleware.Authentication(http.HandlerFunc(rewardsHandler.HandleRedeemReward)))
+	mux.Handle("/v1/loyalty/redemptions", middleware.Authentication(http.HandlerFunc(rewardsHandler.HandleListRedemptions)))
 	
 	// Apply middleware chain
 	// Order: Recovery → Logging → Tracing → CORS
