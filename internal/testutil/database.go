@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	postgrescontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"github.com/yourorg/loyalty-demo/services"
 	"gorm.io/driver/postgres"
@@ -35,11 +35,11 @@ func SetupTestDB(t *testing.T) (*gorm.DB, func()) {
 	ctx := context.Background()
 
 	// Create PostgreSQL container
-	pgContainer, err := postgres.RunContainer(ctx,
+	pgContainer, err := postgrescontainer.RunContainer(ctx,
 		testcontainers.WithImage("postgres:15-alpine"),
-		postgres.WithDatabase("testdb"),
-		postgres.WithUsername("postgres"),
-		postgres.WithPassword("postgres"),
+		postgrescontainer.WithDatabase("testdb"),
+		postgrescontainer.WithUsername("postgres"),
+		postgrescontainer.WithPassword("postgres"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).

@@ -152,7 +152,7 @@
 
 ### Integration Tests for User Story 1 (HTTP Layer Only)
 
-- [ ] T037 [US1] Create enrollment integration test in `handlers/enrollment_handler_test.go`
+- [x] T037 [US1] Create enrollment integration test in `handlers/enrollment_handler_test.go`
   - Table-driven tests with test cases:
     - Happy path: Valid enrollment without referral code
     - Happy path: Valid enrollment with referral code
@@ -172,7 +172,7 @@
   - Cleanup: defer truncateTables(db, "customers", "point_transactions")
   - Verify OpenTracing span created with tags
 
-- [ ] T038 [US1] Create get customer status integration test in `handlers/enrollment_handler_test.go`
+- [x] T038 [US1] Create get customer status integration test in `handlers/enrollment_handler_test.go`
   - Table-driven tests with test cases:
     - Happy path: Enrolled customer gets status
     - Edge case: Not enrolled (404 Not Found)
@@ -187,16 +187,16 @@
 
 ### Implementation for User Story 1
 
-- [ ] T039 [P] [US1] Define LoyaltyService interface in `services/loyalty_service.go`
+- [x] T039 [P] [US1] Define LoyaltyService interface in `services/loyalty_service.go`
   - EnrollCustomer(ctx context.Context, req *pb.EnrollCustomerRequest, accountID string) (*pb.Customer, error)
   - GetCustomerStatus(ctx context.Context, accountID string) (*pb.GetCustomerResponse, error)
   - All methods accept context.Context as first parameter (MANDATORY)
 
-- [ ] T040 [US1] Implement loyaltyService struct in `services/loyalty_service.go`
+- [x] T040 [US1] Implement loyaltyService struct in `services/loyalty_service.go`
   - Constructor: NewLoyaltyService(db *gorm.DB) LoyaltyService
   - Dependency injection: db *gorm.DB field
 
-- [ ] T041 [US1] Implement EnrollCustomer service method in `services/loyalty_service.go`
+- [x] T041 [US1] Implement EnrollCustomer service method in `services/loyalty_service.go`
   - Start OpenTracing span from context
   - Check if customer already enrolled (query by account_id)
   - If already enrolled, return fmt.Errorf("customer %s: %w", accountID, ErrAlreadyEnrolled)
@@ -211,7 +211,7 @@
   - Convert GORM model to protobuf Customer
   - Return protobuf Customer
 
-- [ ] T042 [US1] Implement GetCustomerStatus service method in `services/loyalty_service.go`
+- [x] T042 [US1] Implement GetCustomerStatus service method in `services/loyalty_service.go`
   - Start OpenTracing span from context
   - Query customer by account_id with Preload("Tier") using db.WithContext(ctx)
   - If not found, return fmt.Errorf("customer %s: %w", accountID, ErrNotEnrolled)
@@ -220,7 +220,7 @@
   - Convert to protobuf GetCustomerResponse with customer, points_to_next_tier, points_expiring_soon
   - Return response
 
-- [ ] T043 [US1] Implement EnrollmentHandler in `handlers/enrollment_handler.go`
+- [x] T043 [US1] Implement EnrollmentHandler in `handlers/enrollment_handler.go`
   - Constructor: NewEnrollmentHandler(loyaltyService LoyaltyService) *EnrollmentHandler
   - ServeHTTP for POST /v1/loyalty/enroll
   - Extract or start OpenTracing span from request
@@ -233,7 +233,7 @@
   - Set span tags (http.method, http.url, http.status_code)
   - Log errors to span (span.SetTag("error", true))
 
-- [ ] T044 [US1] Implement GetCustomerHandler in `handlers/enrollment_handler.go`
+- [x] T044 [US1] Implement GetCustomerHandler in `handlers/enrollment_handler.go`
   - ServeHTTP for GET /v1/loyalty/me
   - Extract OpenTracing span from request
   - Extract account_id from context
@@ -242,20 +242,20 @@
   - Encode protobuf GetCustomerResponse as JSON
   - Set span tags
 
-- [ ] T045 [US1] Register enrollment endpoints in `cmd/api/main.go`
+- [x] T045 [US1] Register enrollment endpoints in `cmd/api/main.go`
   - Create LoyaltyService instance
   - Create EnrollmentHandler instance
   - Register POST /v1/loyalty/enroll
   - Register GET /v1/loyalty/me
   - Apply middleware chain (tracing, logging, recovery, auth)
 
-- [ ] T046 [US1] Run enrollment integration tests
+- [x] T046 [US1] Run enrollment integration tests
   - Execute: `go test -v ./handlers -run TestEnrollment`
   - Verify all test cases pass (happy paths and edge cases)
   - Verify OpenTracing spans created
   - Fix any failures before proceeding
 
-**Checkpoint**: User Story 1 is complete - customers can enroll and view status independently
+**Checkpoint**: ✅ User Story 1 is complete - customers can enroll and view status independently
 
 ---
 

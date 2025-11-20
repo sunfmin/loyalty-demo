@@ -29,6 +29,13 @@ func TestEnrollCustomer(t *testing.T) {
 		"qualification_points": int64(0),
 		"earn_rate_multiplier": 1.0,
 	})
+	
+	// Create referrer customer for referral test case
+	_ = testutil.CreateTestCustomer(db, map[string]interface{}{
+		"account_id":    "referrer-001",
+		"referral_code": "FRIEND123",
+		"tier_id":       &baseTier.ID,
+	})
 
 	// Table-driven test cases
 	testCases := []struct {
@@ -50,20 +57,33 @@ func TestEnrollCustomer(t *testing.T) {
 				if resp.Customer == nil {
 					t.Fatal("Expected customer in response")
 				}
-				if resp.Customer.AccountId != "user-001" {
-					t.Errorf("Expected account_id user-001, got %s", resp.Customer.AccountId)
+				
+				// Build expected from REQUEST data (constitutional requirement)
+				// Use generated fields from response: ID, timestamps, membership_number, referral_code
+				expected := &loyaltyv1.Customer{
+					Id:               resp.Customer.Id,               // Generated UUID
+					AccountId:        "user-001",                     // From request context
+					MembershipNumber: resp.Customer.MembershipNumber, // Generated
+					ReferralCode:     resp.Customer.ReferralCode,     // Generated
+					ReferredBy:       "",                             // No referral in request
+					EnrolledAt:       resp.Customer.EnrolledAt,       // Generated timestamp
+					CurrentBalance:   0,                              // Initial balance
+					Tier: &loyaltyv1.Tier{
+						Id:                  resp.Customer.Tier.Id, // Use from response
+						Name:                "Base",                 // Base tier for new enrollments
+						Level:               0,
+						QualificationPoints: 0,
+						EvaluationDays:      365,
+						EarnRateMultiplier:  1.0,
+						Description:         resp.Customer.Tier.Description, // Use from response
+					},
+					CreatedAt: resp.Customer.CreatedAt, // Generated timestamp
+					UpdatedAt: resp.Customer.UpdatedAt, // Generated timestamp
 				}
-				if resp.Customer.MembershipNumber == "" {
-					t.Error("Expected membership_number to be generated")
-				}
-				if resp.Customer.ReferralCode == "" {
-					t.Error("Expected referral_code to be generated")
-				}
-				if resp.Customer.CurrentBalance != 0 {
-					t.Errorf("Expected initial balance 0, got %d", resp.Customer.CurrentBalance)
-				}
-				if resp.Customer.Tier == nil || resp.Customer.Tier.Name != "Base" {
-					t.Error("Expected Base tier assigned")
+				
+				// Compare entire message using protocmp (MANDATORY per constitution)
+				if diff := cmp.Diff(expected, resp.Customer, protocmp.Transform()); diff != "" {
+					t.Errorf("Customer mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
@@ -71,25 +91,42 @@ func TestEnrollCustomer(t *testing.T) {
 			name:      "Happy path: Valid enrollment with referral code",
 			accountID: "user-002",
 			request: &loyaltyv1.EnrollCustomerRequest{
-				ReferralCode: "",
+				ReferralCode: "FRIEND123", // Use referrer's code created above
 			},
 			setupFixtures: func() {
-				// Create existing customer with referral code
-				referrer := testutil.CreateTestCustomer(db, map[string]interface{}{
-					"account_id":    "referrer-001",
-					"referral_code": "FRIEND123",
-					"tier_id":       &baseTier.ID,
-				})
-				// Store referral code for test
-				testCases[1].request.ReferralCode = referrer.ReferralCode
+				// Referrer already created above test cases
 			},
 			expectedStatus: http.StatusCreated,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.EnrollCustomerResponse) {
 				if resp.Customer == nil {
 					t.Fatal("Expected customer in response")
 				}
-				if resp.Customer.ReferredBy != "FRIEND123" {
-					t.Errorf("Expected referred_by to be FRIEND123, got %s", resp.Customer.ReferredBy)
+				
+				// Build expected from REQUEST data (constitutional requirement)
+				expected := &loyaltyv1.Customer{
+					Id:               resp.Customer.Id,               // Generated UUID
+					AccountId:        "user-002",                     // From request context
+					MembershipNumber: resp.Customer.MembershipNumber, // Generated
+					ReferralCode:     resp.Customer.ReferralCode,     // Generated
+					ReferredBy:       "FRIEND123",                    // From request.ReferralCode
+					EnrolledAt:       resp.Customer.EnrolledAt,       // Generated timestamp
+					CurrentBalance:   0,                              // Initial balance
+					Tier: &loyaltyv1.Tier{
+						Id:                  resp.Customer.Tier.Id,
+						Name:                "Base",
+						Level:               0,
+						QualificationPoints: 0,
+						EvaluationDays:      365,
+						EarnRateMultiplier:  1.0,
+						Description:         resp.Customer.Tier.Description,
+					},
+					CreatedAt: resp.Customer.CreatedAt,
+					UpdatedAt: resp.Customer.UpdatedAt,
+				}
+				
+				// Compare entire message using protocmp (MANDATORY per constitution)
+				if diff := cmp.Diff(expected, resp.Customer, protocmp.Transform()); diff != "" {
+					t.Errorf("Customer mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
@@ -123,6 +160,26 @@ func TestEnrollCustomer(t *testing.T) {
 			request:        &loyaltyv1.EnrollCustomerRequest{},
 			setupFixtures:  func() {},
 			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:      "Edge case: SQL injection attempt in referral code",
+			accountID: "user-sql-inject",
+			request: &loyaltyv1.EnrollCustomerRequest{
+				ReferralCode: "'; DROP TABLE customers; --",
+			},
+			setupFixtures:  func() {},
+			expectedStatus: http.StatusBadRequest, // Invalid referral code
+			expectedError:  "INVALID_REQUEST",
+		},
+		{
+			name:      "Edge case: XSS payload in referral code",
+			accountID: "user-xss",
+			request: &loyaltyv1.EnrollCustomerRequest{
+				ReferralCode: "<script>alert('xss')</script>",
+			},
+			setupFixtures:  func() {},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "INVALID_REQUEST",
 		},
 	}
 
@@ -225,11 +282,36 @@ func TestGetCustomerStatus(t *testing.T) {
 				if resp.Customer == nil {
 					t.Fatal("Expected customer in response")
 				}
-				if resp.Customer.CurrentBalance != 500 {
-					t.Errorf("Expected balance 500, got %d", resp.Customer.CurrentBalance)
+				
+				// Build expected response from REQUEST/FIXTURE data
+				expectedResponse := &loyaltyv1.GetCustomerResponse{
+					Customer: &loyaltyv1.Customer{
+						Id:               resp.Customer.Id,               // Use from response
+						AccountId:        "user-enrolled",                // From fixture
+						MembershipNumber: resp.Customer.MembershipNumber, // Use from response
+						ReferralCode:     resp.Customer.ReferralCode,     // Use from response
+						ReferredBy:       "",                             // No referral in fixture
+						EnrolledAt:       resp.Customer.EnrolledAt,       // Use from response
+						CurrentBalance:   500,                            // From fixture
+						Tier: &loyaltyv1.Tier{
+							Id:                  resp.Customer.Tier.Id,
+							Name:                "Base",
+							Level:               0,
+							QualificationPoints: 0,
+							EvaluationDays:      365,
+							EarnRateMultiplier:  1.0,
+							Description:         resp.Customer.Tier.Description,
+						},
+						CreatedAt: resp.Customer.CreatedAt,
+						UpdatedAt: resp.Customer.UpdatedAt,
+					},
+					PointsToNextTier:    resp.PointsToNextTier,    // Calculated field
+					PointsExpiringSoon:  resp.PointsExpiringSoon,  // Calculated field
 				}
-				if resp.Customer.Tier == nil || resp.Customer.Tier.Name != "Base" {
-					t.Error("Expected Base tier")
+				
+				// Compare entire message using protocmp (MANDATORY per constitution)
+				if diff := cmp.Diff(expectedResponse, resp, protocmp.Transform()); diff != "" {
+					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
