@@ -1,0 +1,382 @@
+package handlers
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	loyaltyv1 "github.com/yourorg/loyalty-demo/api/v1"
+	"github.com/yourorg/loyalty-demo/internal/middleware"
+	"github.com/yourorg/loyalty-demo/internal/models"
+	"github.com/yourorg/loyalty-demo/internal/testutil"
+	"github.com/yourorg/loyalty-demo/services"
+	"google.golang.org/protobuf/testing/protocmp"
+)
+
+func TestEarnPoints(t *testing.T) {
+	// Setup test database
+	db, cleanup := testutil.SetupTestDB(t)
+	defer cleanup()
+	defer testutil.TruncateTables(db, "point_transactions", "customers", "membership_tiers", "promotional_campaigns")
+
+	// Create base tier
+	baseTier := testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Base",
+		"level":                0,
+		"qualification_points": int64(0),
+		"earn_rate_multiplier": 1.0,
+	})
+
+	// Create Gold tier for multiplier test
+	goldTier := testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Gold",
+		"level":                2,
+		"qualification_points": int64(1000),
+		"earn_rate_multiplier": 1.5,
+	})
+
+	// Create test campaign (double points)
+	campaign := testutil.CreateTestCampaign(db, map[string]interface{}{
+		"name":             "Double Points Weekend",
+		"point_multiplier": 2.0,
+		"is_active":        true,
+		"start_date":       time.Now().Add(-1 * time.Hour),
+		"end_date":         time.Now().Add(24 * time.Hour),
+	})
+
+	// Table-driven test cases
+	testCases := []struct {
+		name             string
+		accountID        string
+		request          *loyaltyv1.EarnPointsRequest
+		setupFixtures    func() string // Returns customer ID
+		expectedStatus   int
+		expectedError    string
+		validateResponse func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string)
+	}{
+		{
+			name:      "Happy path: Valid purchase earns points (1 point per dollar)",
+			accountID: "user-earn-001",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        5000, // $50.00 in cents
+				ReferenceId:   "order-12345",
+				ReferenceType: "ORDER",
+				Description:   "Purchase at Main Street Store",
+			},
+			setupFixtures: func() string {
+				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-earn-001",
+					"tier_id":    &baseTier.ID,
+				})
+				return customer.ID
+			},
+			expectedStatus: http.StatusCreated,
+			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
+				if resp.Transaction == nil {
+					t.Fatal("Expected transaction in response")
+				}
+
+				// Build expected from REQUEST data
+				// Note: Campaign is active (2.0x), so $50 -> 50 base points * 2.0 = 100 points
+				expected := &loyaltyv1.EarnPointsResponse{
+					Transaction: &loyaltyv1.PointTransaction{
+						Id:            resp.Transaction.Id,          // Generated
+						CustomerId:    customerID,                   // From fixture
+						Amount:        100,                          // $50.00 -> 50 base * 2.0x campaign = 100 points
+						Type:          loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN,
+						ReferenceId:   "order-12345",               // From request
+						ReferenceType: "ORDER",                     // From request
+						Description:   "Purchase at Main Street Store", // From request
+						CampaignId:    resp.Transaction.CampaignId, // Campaign applied
+						CreatedAt:     resp.Transaction.CreatedAt,  // Generated
+						ExpiresAt:     resp.Transaction.ExpiresAt,  // Generated
+					},
+					NewBalance: 100, // Initial 0 + 100 earned (with campaign)
+					CampaignApplied: resp.CampaignApplied, // Campaign applied (double points)
+				}
+
+				// Use protocmp for comparison (MANDATORY)
+				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
+					t.Errorf("Response mismatch (-want +got):\n%s", diff)
+				}
+
+				// Verify expiration set to 12 months from now
+				if resp.Transaction.ExpiresAt != nil {
+					expiresAt := resp.Transaction.ExpiresAt.AsTime()
+					expectedExpiry := time.Now().Add(365 * 24 * time.Hour)
+					timeDiff := expiresAt.Sub(expectedExpiry).Abs()
+					if timeDiff > 1*time.Minute {
+						t.Errorf("Expected expiration ~12 months from now, got %v", expiresAt)
+					}
+				}
+			},
+		},
+		{
+			name:      "Happy path: Points with tier multiplier (Gold 1.5x) and campaign",
+			accountID: "user-earn-gold",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        5000, // $50.00
+				ReferenceId:   "order-gold-001",
+				ReferenceType: "ORDER",
+				Description:   "Gold tier purchase",
+			},
+			setupFixtures: func() string {
+				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-earn-gold",
+					"tier_id":    &goldTier.ID,
+				})
+				return customer.ID
+			},
+			expectedStatus: http.StatusCreated,
+			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
+				// Base: $50 = 50 points
+				// Tier multiplier: 50 * 1.5 = 75 points
+				// Campaign bonus: 50 * (2.0 - 1.0) = 50 bonus points
+				// Total: 75 + 50 = 125 points
+				if resp.Transaction.Amount != 125 {
+					t.Errorf("Expected 125 points (1.5x tier + 2.0x campaign), got %d", resp.Transaction.Amount)
+				}
+				// Verify campaign was applied
+				if resp.CampaignApplied == nil {
+					t.Error("Expected campaign to be applied")
+				}
+			},
+		},
+		{
+			name:      "Happy path: Idempotent requests (same reference_id)",
+			accountID: "user-earn-idempotent",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        3000,
+				ReferenceId:   "order-idempotent-123",
+				ReferenceType: "ORDER",
+				Description:   "Idempotent test",
+			},
+			setupFixtures: func() string {
+				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-earn-idempotent",
+					"tier_id":    &baseTier.ID,
+				})
+				// Create existing transaction with same reference_id
+				refID := "order-idempotent-123"
+				testutil.CreateTestTransaction(db, customer.ID, map[string]interface{}{
+					"amount":         int64(30),
+					"type":           models.TransactionTypeEarn,
+					"reference_id":   &refID,
+					"reference_type": stringPtr("ORDER"),
+					"description":    "Idempotent test",
+				})
+				return customer.ID
+			},
+			expectedStatus: http.StatusCreated,
+			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
+				// Should return existing transaction (30 points, not recalculated)
+				if resp.Transaction.Amount != 30 {
+					t.Errorf("Expected existing transaction with 30 points, got %d", resp.Transaction.Amount)
+				}
+				if resp.Transaction.ReferenceId != "order-idempotent-123" {
+					t.Errorf("Expected reference_id preserved")
+				}
+			},
+		},
+		{
+			name:      "Edge case: Negative amount",
+			accountID: "user-earn-negative",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        -100,
+				ReferenceId:   "order-negative",
+				ReferenceType: "ORDER",
+				Description:   "Negative amount test",
+			},
+			setupFixtures: func() string {
+				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-earn-negative",
+					"tier_id":    &baseTier.ID,
+				})
+				return customer.ID
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "INVALID_AMOUNT",
+		},
+		{
+			name:      "Edge case: Zero amount",
+			accountID: "user-earn-zero",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        0,
+				ReferenceId:   "order-zero",
+				ReferenceType: "ORDER",
+				Description:   "Zero amount test",
+			},
+			setupFixtures: func() string {
+				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-earn-zero",
+					"tier_id":    &baseTier.ID,
+				})
+				return customer.ID
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "INVALID_AMOUNT",
+		},
+		{
+			name:      "Edge case: Missing reference_id",
+			accountID: "user-earn-no-ref",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        1000,
+				ReferenceId:   "",
+				ReferenceType: "ORDER",
+				Description:   "Missing reference",
+			},
+			setupFixtures: func() string {
+				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-earn-no-ref",
+					"tier_id":    &baseTier.ID,
+				})
+				return customer.ID
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "MISSING_REQUIRED",
+		},
+		{
+			name:      "Edge case: Customer not enrolled",
+			accountID: "user-not-enrolled-earn",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        1000,
+				ReferenceId:   "order-not-enrolled",
+				ReferenceType: "ORDER",
+				Description:   "Not enrolled test",
+			},
+			setupFixtures:  func() string { return "" },
+			expectedStatus: http.StatusNotFound,
+			expectedError:  "CUSTOMER_NOT_FOUND",
+		},
+		{
+			name:      "Edge case: Missing authentication",
+			accountID: "",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        1000,
+				ReferenceId:   "order-no-auth",
+				ReferenceType: "ORDER",
+				Description:   "No auth test",
+			},
+			setupFixtures:  func() string { return "" },
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:      "Edge case: SQL injection in reference_id",
+			accountID: "user-earn-sql",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        1000,
+				ReferenceId:   "'; DROP TABLE point_transactions; --",
+				ReferenceType: "ORDER",
+				Description:   "SQL injection test",
+			},
+			setupFixtures: func() string {
+				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-earn-sql",
+					"tier_id":    &baseTier.ID,
+				})
+				return customer.ID
+			},
+			expectedStatus: http.StatusCreated, // Should handle safely with parameterized queries
+			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
+				// Verify reference_id stored as-is (not executed as SQL)
+				if resp.Transaction.ReferenceId != "'; DROP TABLE point_transactions; --" {
+					t.Error("Reference ID should be stored safely")
+				}
+			},
+		},
+		{
+			name:      "Edge case: Extremely large amount (overflow protection)",
+			accountID: "user-earn-large",
+			request: &loyaltyv1.EarnPointsRequest{
+				Amount:        9223372036854775807, // Max int64
+				ReferenceId:   "order-large",
+				ReferenceType: "ORDER",
+				Description:   "Large amount test",
+			},
+			setupFixtures: func() string {
+				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
+					"account_id": "user-earn-large",
+					"tier_id":    &baseTier.ID,
+				})
+				return customer.ID
+			},
+			expectedStatus: http.StatusCreated,
+			validateResponse: func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string) {
+				// Should calculate correctly without overflow
+				// Max int64 cents / 100 = huge points but valid
+				if resp.Transaction.Amount <= 0 {
+					t.Error("Expected positive points for large amount")
+				}
+			},
+		},
+	}
+
+	// Keep track of campaign for validation
+	_ = campaign
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup fixtures for this test case
+			customerID := tc.setupFixtures()
+
+			// Create request
+			body, err := json.Marshal(tc.request)
+			if err != nil {
+				t.Fatalf("Failed to marshal request: %v", err)
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/loyalty/points/earn", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+
+			// Add authentication to context (mock)
+			if tc.accountID != "" {
+				ctx := context.WithValue(req.Context(), middleware.UserIDKey, tc.accountID)
+				req = req.WithContext(ctx)
+			}
+
+			rec := httptest.NewRecorder()
+
+			// Create service and handler
+			transactionService := services.NewTransactionService(db)
+			handler := NewPointsHandler(transactionService)
+
+			// Call handler
+			handler.HandleEarnPoints(rec, req)
+
+			// Verify response status
+			if rec.Code != tc.expectedStatus {
+				t.Errorf("Expected status %d, got %d", tc.expectedStatus, rec.Code)
+			}
+
+			// For success cases, validate response
+			if tc.expectedStatus == http.StatusCreated && tc.validateResponse != nil {
+				var resp loyaltyv1.EarnPointsResponse
+				if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+					t.Fatalf("Failed to decode response: %v", err)
+				}
+				tc.validateResponse(t, &resp, customerID)
+			}
+
+			// For error cases, validate error code
+			if tc.expectedError != "" {
+				var errResp map[string]interface{}
+				if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+					t.Fatalf("Failed to decode error response: %v", err)
+				}
+				if errResp["code"] != tc.expectedError {
+					t.Errorf("Expected error code %s, got %v", tc.expectedError, errResp["code"])
+				}
+			}
+		})
+	}
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
