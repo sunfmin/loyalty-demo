@@ -43,11 +43,14 @@ func main() {
 	loyaltyService := services.NewLoyaltyService(db)
 	transactionService := services.NewTransactionService(db)
 	rewardService := services.NewRewardService(db, transactionService)
+	campaignService := services.NewCampaignService(db)
+	analyticsService := services.NewAnalyticsService(db)
 	
 	// Create handlers
 	enrollmentHandler := handlers.NewEnrollmentHandler(loyaltyService)
 	pointsHandler := handlers.NewPointsHandler(transactionService, loyaltyService) // Pass loyaltyService for tier evaluation
 	rewardsHandler := handlers.NewRewardsHandler(rewardService)
+	adminUIHandler := handlers.NewAdminUIHandler(loyaltyService, transactionService, rewardService, campaignService, analyticsService)
 	
 	// Create HTTP multiplexer
 	mux := http.NewServeMux()
@@ -68,6 +71,17 @@ func main() {
 	mux.HandleFunc("/v1/loyalty/rewards", rewardsHandler.HandleListRewards) // Public catalog
 	mux.Handle("/v1/loyalty/rewards/redeem", middleware.Authentication(http.HandlerFunc(rewardsHandler.HandleRedeemReward)))
 	mux.Handle("/v1/loyalty/redemptions", middleware.Authentication(http.HandlerFunc(rewardsHandler.HandleListRedemptions)))
+	
+	// Register admin UI endpoints (require admin role via Authentication middleware with admin token)
+	mux.HandleFunc("/admin", adminUIHandler.HandleDashboard)
+	mux.HandleFunc("/admin/adjust-points", adminUIHandler.HandleAdjustPoints)
+	mux.HandleFunc("/admin/campaigns/new", adminUIHandler.HandleCreateCampaign)
+	mux.HandleFunc("/admin/customers", adminUIHandler.HandleCustomerSearch)
+	
+	// Register admin API endpoints for HTMX (return HTML fragments)
+	mux.HandleFunc("/admin/api/adjust-points", adminUIHandler.HandleAdjustPointsSubmit)
+	mux.HandleFunc("/admin/api/campaigns", adminUIHandler.HandleCreateCampaignSubmit)
+	mux.HandleFunc("/admin/api/customers/lookup", adminUIHandler.HandleCustomerLookup)
 	
 	// Apply middleware chain
 	// Order: Recovery → Logging → Tracing → CORS
