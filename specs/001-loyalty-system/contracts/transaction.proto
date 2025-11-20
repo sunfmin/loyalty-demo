@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package loyalty.v1;
+
+option go_package = "github.com/yourorg/loyalty-demo/api/gen/loyalty/v1;loyaltyv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Transaction types
+
+enum TransactionType {
+  TRANSACTION_TYPE_UNSPECIFIED = 0;
+  TRANSACTION_TYPE_EARN = 1;
+  TRANSACTION_TYPE_REDEMPTION = 2;
+  TRANSACTION_TYPE_ADJUSTMENT = 3;
+  TRANSACTION_TYPE_REFERRAL = 4;
+  TRANSACTION_TYPE_EXPIRATION = 5;
+}
+
+message Campaign {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  google.protobuf.Timestamp start_date = 4;
+  google.protobuf.Timestamp end_date = 5;
+  double point_multiplier = 6;
+  int64 bonus_points = 7;
+}
+
+message PointTransaction {
+  string id = 1;
+  string customer_id = 2;
+  int64 amount = 3;  // Positive for earning, negative for spending
+  TransactionType type = 4;
+  string reference_id = 5;
+  string reference_type = 6;
+  string description = 7;
+  string campaign_id = 8;
+  string redemption_id = 9;
+  google.protobuf.Timestamp expired_at = 10;
+  google.protobuf.Timestamp expires_at = 11;
+  string admin_user_id = 12;
+  string admin_note = 13;
+  google.protobuf.Timestamp created_at = 14;
+}
+
+// Earn points
+
+message EarnPointsRequest {
+  int64 amount = 1;  // Transaction amount in cents
+  string reference_id = 2;  // External reference (order ID, etc.)
+  string reference_type = 3;  // Type of reference (ORDER, etc.)
+  string description = 4;
+}
+
+message CampaignApplied {
+  string id = 1;
+  string name = 2;
+  int64 bonus_points = 3;
+}
+
+message EarnPointsResponse {
+  PointTransaction transaction = 1;
+  int64 new_balance = 2;
+  CampaignApplied campaign_applied = 3;
+}
+
+// Transaction history
+
+message ListTransactionsRequest {
+  int32 limit = 1;   // Default: 50, Max: 100
+  int32 offset = 2;  // Default: 0
+  TransactionType type = 3;  // Optional filter
+  google.protobuf.Timestamp start_date = 4;  // Optional filter
+  google.protobuf.Timestamp end_date = 5;    // Optional filter
+}
+
+message ListTransactionsResponse {
+  repeated PointTransaction transactions = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// Admin - Manual adjustment
+
+message AdjustPointsRequest {
+  int64 amount = 1;  // Positive to add, negative to deduct
+  string reason = 2;  // Required explanation
+}
+
+message AdjustPointsResponse {
+  PointTransaction transaction = 1;
+  int64 new_balance = 2;
+}
+

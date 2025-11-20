@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package loyalty.v1;
+
+option go_package = "github.com/yourorg/loyalty-demo/api/gen/loyalty/v1;loyaltyv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+import "api/v1/transaction.proto";
+
+// Reward types
+
+enum RewardType {
+  REWARD_TYPE_UNSPECIFIED = 0;
+  REWARD_TYPE_DISCOUNT = 1;
+  REWARD_TYPE_VOUCHER = 2;
+  REWARD_TYPE_FREE_ITEM = 3;
+}
+
+message Reward {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  RewardType type = 4;
+  int64 point_cost = 5;
+  bool is_active = 6;
+  google.protobuf.Struct metadata = 7;  // Flexible JSON data
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// Redemption types
+
+enum RedemptionStatus {
+  REDEMPTION_STATUS_UNSPECIFIED = 0;
+  REDEMPTION_STATUS_ACTIVE = 1;
+  REDEMPTION_STATUS_USED = 2;
+  REDEMPTION_STATUS_REVERSED = 3;
+}
+
+message Redemption {
+  string id = 1;
+  string customer_id = 2;
+  Reward reward = 3;
+  int64 points_deducted = 4;
+  RedemptionStatus status = 5;
+  string code = 6;  // Discount/voucher code
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp used_at = 8;
+  google.protobuf.Timestamp reversed_at = 9;
+  string reversal_reason = 10;
+}
+
+// List rewards
+
+message ListRewardsRequest {
+  bool active_only = 1;  // Default: true
+  int64 max_points = 2;  // Optional filter
+}
+
+message ListRewardsResponse {
+  repeated Reward rewards = 1;
+}
+
+// Redeem reward
+
+message RedeemRewardRequest {
+  string reward_id = 1;
+}
+
+message RedeemRewardResponse {
+  Redemption redemption = 1;
+  int64 new_balance = 2;
+  PointTransaction transaction = 3;  // From transaction.proto
+}
+
+// List redemptions
+
+message ListRedemptionsRequest {
+  int32 limit = 1;   // Default: 50, Max: 100
+  int32 offset = 2;  // Default: 0
+  RedemptionStatus status = 3;  // Optional filter
+}
+
+message ListRedemptionsResponse {
+  repeated Redemption redemptions = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// Admin - Reverse redemption
+
+message ReverseRedemptionRequest {
+  string reason = 1;  // Required explanation
+}
+
+message ReverseRedemptionResponse {
+  Redemption redemption = 1;
+  int64 points_restored = 2;
+  int64 new_balance = 3;
+  PointTransaction transaction = 4;
+}
+
