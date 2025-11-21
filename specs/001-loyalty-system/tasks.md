@@ -6,6 +6,8 @@
 
 **Tests**: Integration tests are MANDATORY per constitution. All tests use real PostgreSQL database via testcontainers-go (no mocking), follow table-driven patterns, use GORM for fixtures, use protobuf structs (NOT maps), verify OpenTracing instrumentation, and cover comprehensive edge cases. Tests are conducted at HTTP layer only (httptest), which exercises the full stack: HTTP → Service → Repository → Database.
 
+**Test Assertions (Constitution v1.3.3)**: Build expected from fixtures (request data, DB fixtures, config), NOT response. Read `testutil/fixtures.go` to identify defaults. Only use response for truly random: UUIDs, timestamps, crypto/rand.
+
 **⚠️ CRITICAL - Principle XI: Continuous Test Verification**: Tests MUST be run after EVERY code change. Tasks are NOT complete until tests pass. Run `go test -v ./...` after each implementation task and fix failures immediately before proceeding.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
