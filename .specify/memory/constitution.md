@@ -1,67 +1,3 @@
-<!--
-SYNC IMPACT REPORT - Constitution Update
-
-Version Change: 1.2.0 → 1.3.0
-
-Modified Principles:
-- None (existing principles unchanged)
-
-Added Sections:
-- NEW Principle XIII: Acceptance Scenario Coverage (Spec-to-Test Mapping)
-  - Mandates one-to-one mapping between spec acceptance scenarios and integration tests
-  - Requires every "Given/When/Then" scenario to have a corresponding test case
-  - MUST use table-driven test design (aligns with Principle II)
-  - MUST use protocmp for protobuf assertions (aligns with Principle VI)
-  - Enforces traceability from requirements to test coverage
-  - Prevents specification drift where documented scenarios lack test validation
-  - Ensures acceptance criteria are actually tested, not just documented
-
-Removed Sections:
-- None
-
-Templates Requiring Updates:
-- ✅ spec-template.md - UPDATED (added acceptance scenario testing requirements with US#-AS# labeling)
-- ✅ tasks-template.md - UPDATED (added acceptance scenario testing tasks and validation phase)
-- ✅ constitution.md - UPDATED (added Principle XIII with complete guidance and examples)
-
-Template Analysis:
-- spec-template.md: Added scenario ID format [US#-AS#] and traceability guidance
-- tasks-template.md: Added scenario testing tasks and acceptance scenario validation phase
-- plan-template.md: No changes needed (doesn't define tests)
-
-Key Features of Principle XIII:
-- Table-driven test design for acceptance scenarios (aligns with Principle II)
-- Protocmp for all protobuf assertions (aligns with Principle VI)
-- Test case `name` field must reference scenario ID (e.g., "US1-AS1: New customer enrolls")
-- One test function per user story/feature grouping related scenarios
-- Optional traceability matrix (recommended but not mandatory)
-- Complete examples showing correct table-driven pattern with protocmp
-
-Follow-up TODOs:
-- None - all dependent artifacts updated
-
-Change Type: MINOR (new principle added)
-Rationale: Adding acceptance scenario coverage as a non-negotiable principle ensures that documented
-acceptance criteria are actually validated by tests. This creates explicit traceability from
-specification to implementation to testing, preventing the common problem where specs document
-scenarios that are never actually tested. This is a material expansion of testing discipline that
-fundamentally changes how specifications translate to test coverage. The principle explicitly
-requires table-driven tests and protocmp to ensure consistency with existing constitutional standards.
-
----
-
-Version: 1.3.0
-Date: 2025-11-21
-Changes: Added Principle XIII (Acceptance Scenario Coverage) with table-driven and protocmp requirements - MINOR version bump
-Rationale: Enforce one-to-one mapping between spec acceptance scenarios and integration tests using constitutional testing standards
-Status: Active - mandates complete acceptance scenario coverage in tests with table-driven design
-Previous Versions:
-  - 1.2.0 (2025-11-20) - Added Principle XII (Root Cause Tracing)
-  - 1.1.0 (2025-11-20) - Added Principle XI (Continuous Test Verification)
-  - 1.0.0 (2025-11-20) - Initial release
--->
-
-
 # Go Project Constitution Template
 
 ## Core Principles
@@ -139,9 +75,12 @@ All public API data structures MUST be defined in Protocol Buffers:
 - Tests MUST NOT use standard `==` or `reflect.DeepEqual` for protobuf message comparison
 - Tests MUST NOT use individual field comparisons (e.g., `if response.Name != expected.Name`) for protobuf messages
 - ALL protobuf message assertions in tests MUST use `cmp.Diff()` with `protocmp.Transform()` to compare entire messages
-- Expected test data MUST be built from REQUEST data (what you sent), NOT from RESPONSE data
-- Copying response data into expected values defeats the purpose of testing (test will always pass)
-- Generated fields (ID, timestamps) are the ONLY exception - these can be copied from response
+- **Expected test data MUST be derived from TEST FIXTURES (input data), NOT from RESPONSE data**
+- **Test fixtures include: request payload data, database fixture data, configuration values, test constants**
+- **ALWAYS try your best to derive expected values from test fixtures before considering response values**
+- **Copying response data into expected values defeats the purpose of testing (test will always pass)**
+- **Use response values ONLY for truly random/generated fields that cannot be derived from fixtures**
+- Generated fields (ID, timestamps, secure tokens) are the ONLY exception - these can be copied from response
 - Individual field checks are ONLY acceptable for non-protobuf types (e.g., checking if a string ID is not empty before comparison)
 
 **Rationale**: Protobuf provides compile-time type safety, eliminates runtime type assertion errors, enables automatic validation, supports multiple language clients, enforces schema-first API design, and prevents the fragile `map[string]interface{}` pattern that loses type information and requires extensive runtime validation. Proper protobuf comparison ensures correct field comparison including unknown fields, extensions, and proto semantics. Individual field comparisons miss structural differences, ignore unknown fields, and fail to validate the complete message structure, leading to incomplete test coverage.
@@ -190,25 +129,50 @@ import (
     "google.golang.org/protobuf/testing/protocmp"
 )
 
-// CORRECT: Build expected from REQUEST data (what you sent)
+// CORRECT: Build expected from TEST FIXTURES (request data + database fixtures)
 var response pb.CreateProductResponse
 json.NewDecoder(rec.Body).Decode(&response)
 
-// Build expected from the request, NOT from response
+// Derive expected from FIXTURES - request data (what you sent) + DB fixtures (what you created)
 expectedResponse := &pb.CreateProductResponse{
     Product: &pb.Product{
-        Id:          response.Product.Id,        // Use generated ID from response
-        Name:        requestData.Name,           // From request (what you sent)
-        Sku:         requestData.Sku,            // From request
-        Description: requestData.Description,    // From request
-        Price:       requestData.Price,          // From request
-        CreatedAt:   response.Product.CreatedAt, // Use generated timestamp
-        UpdatedAt:   response.Product.UpdatedAt, // Use generated timestamp
+        Id:          response.Product.Id,        // Use generated ID from response (random)
+        Name:        requestData.Name,           // From REQUEST fixture (what you sent)
+        Sku:         requestData.Sku,            // From REQUEST fixture
+        Description: requestData.Description,    // From REQUEST fixture
+        Price:       requestData.Price,          // From REQUEST fixture
+        CreatedAt:   response.Product.CreatedAt, // Use generated timestamp (random)
+        UpdatedAt:   response.Product.UpdatedAt, // Use generated timestamp (random)
     },
 }
 
-// Compare entire messages - validates request data matches response
+// Compare entire messages - validates fixtures match response
 if diff := cmp.Diff(expectedResponse, &response, protocmp.Transform()); diff != "" {
+    t.Errorf("Response mismatch (-want +got):\n%s", diff)
+}
+
+// Example with DATABASE FIXTURE data (for endpoints that reference existing data)
+// CORRECT: Derive from database fixture you created in test setup
+category := testutil.CreateTestCategory(db, map[string]interface{}{
+    "name": "Electronics",
+    "slug": "electronics",
+})
+
+var getResponse pb.GetProductResponse
+json.NewDecoder(rec.Body).Decode(&getResponse)
+
+expectedGetResponse := &pb.GetProductResponse{
+    Product: &pb.Product{
+        Id:           getResponse.Product.Id,       // Generated (random)
+        Name:         "Laptop",                     // From REQUEST fixture
+        CategoryId:   category.ID,                  // From DATABASE fixture (created above)
+        CategoryName: "Electronics",                // From DATABASE fixture
+        CategorySlug: "electronics",                // From DATABASE fixture
+        CreatedAt:    getResponse.Product.CreatedAt, // Generated (random)
+    },
+}
+
+if diff := cmp.Diff(expectedGetResponse, &getResponse, protocmp.Transform()); diff != "" {
     t.Errorf("Response mismatch (-want +got):\n%s", diff)
 }
 
@@ -2281,9 +2245,10 @@ All pull requests MUST be reviewed against these constitutional requirements, or
 
 This constitution is version-controlled alongside code and follows the same review process as code changes.
 
-**Version**: 1.3.0 | **Ratified**: 2025-11-20 | **Last Amended**: 2025-11-21
+**Version**: 1.3.1 | **Ratified**: 2025-11-20 | **Last Amended**: 2025-11-21
 
 **Version History**:
+- **1.3.1** (2025-11-21): Enhanced Principle VI (Protobuf Data Structures) - strengthened test fixture guidance to explicitly derive expected values from test fixtures (request data, DB fixtures, config) NOT response data, except for truly random/generated fields
 - **1.3.0** (2025-11-21): Added Principle XIII (Acceptance Scenario Coverage) - requires one-to-one mapping between spec acceptance scenarios and integration tests using table-driven design and protocmp
 - **1.2.0** (2025-11-20): Added Principle XII (Root Cause Tracing) - requires debugging problems at source, not symptoms
 - **1.1.0** (2025-11-20): Added Principle XI (Continuous Test Verification) - requires running tests after all code changes
