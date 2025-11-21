@@ -73,13 +73,13 @@ func TestEnrollmentAcceptanceScenarios(t *testing.T) {
 					EnrolledAt:       resp.Customer.EnrolledAt,       // Generated timestamp (truly random)
 					CurrentBalance:   0,                              // Initial balance (known rule)
 					Tier: &loyaltyv1.Tier{
-						Id:                  resp.Customer.Tier.Id,   // Generated (from DB fixture)
+						Id:                  baseTier.ID,              // From DATABASE fixture (baseTier.ID)
 						Name:                "Base",                   // From DATABASE fixture (baseTier)
 						Level:               0,                        // From DATABASE fixture
 						QualificationPoints: 0,                        // From DATABASE fixture
 						EvaluationDays:      365,                      // System default
 						EarnRateMultiplier:  1.0,                      // From DATABASE fixture
-						Description:         resp.Customer.Tier.Description, // Generated (from DB)
+						Description:         "Base tier for testing",  // From DATABASE fixture (CreateTestTier default)
 					},
 					CreatedAt: resp.Customer.CreatedAt, // Generated timestamp (truly random)
 					UpdatedAt: resp.Customer.UpdatedAt, // Generated timestamp (truly random)
@@ -113,13 +113,13 @@ func TestEnrollmentAcceptanceScenarios(t *testing.T) {
 					EnrolledAt:       resp.Customer.EnrolledAt,       // Generated timestamp (truly random)
 					CurrentBalance:   0,                              // Initial balance (known rule)
 					Tier: &loyaltyv1.Tier{
-						Id:                  resp.Customer.Tier.Id,
-						Name:                "Base",                   // From DATABASE fixture
+						Id:                  baseTier.ID,              // From DATABASE fixture (baseTier.ID)
+						Name:                "Base",                   // From DATABASE fixture (baseTier)
 						Level:               0,                        // From DATABASE fixture
 						QualificationPoints: 0,                        // From DATABASE fixture
 						EvaluationDays:      365,                      // System default
 						EarnRateMultiplier:  1.0,                      // From DATABASE fixture
-						Description:         resp.Customer.Tier.Description,
+						Description:         "Base tier for testing",  // From DATABASE fixture (CreateTestTier default)
 					},
 					CreatedAt: resp.Customer.CreatedAt, // Generated timestamp (truly random)
 					UpdatedAt: resp.Customer.UpdatedAt, // Generated timestamp (truly random)
@@ -173,13 +173,13 @@ func TestEnrollmentAcceptanceScenarios(t *testing.T) {
 					EnrolledAt:       resp.Customer.EnrolledAt,       // Generated (truly random)
 					CurrentBalance:   0,                              // Initial balance (known rule)
 					Tier: &loyaltyv1.Tier{
-						Id:                  resp.Customer.Tier.Id,
+						Id:                  baseTier.ID,              // From DATABASE fixture (baseTier.ID)
 						Name:                "Base",                   // From DATABASE fixture
 						Level:               0,                        // From DATABASE fixture
 						QualificationPoints: 0,                        // From DATABASE fixture
 						EvaluationDays:      365,                      // System default
 						EarnRateMultiplier:  1.0,                      // From DATABASE fixture
-						Description:         resp.Customer.Tier.Description,
+						Description:         "Base tier for testing",  // From DATABASE fixture (CreateTestTier default)
 					},
 					CreatedAt: resp.Customer.CreatedAt, // Generated (truly random)
 					UpdatedAt: resp.Customer.UpdatedAt, // Generated (truly random)
@@ -354,13 +354,13 @@ func TestViewStatusAcceptanceScenarios(t *testing.T) {
 						EnrolledAt:       resp.Customer.EnrolledAt,       // Generated timestamp (truly random)
 						CurrentBalance:   500,                            // From DATABASE fixture
 						Tier: &loyaltyv1.Tier{
-							Id:                  resp.Customer.Tier.Id,   // From DATABASE fixture
+							Id:                  baseTier.ID,              // From DATABASE fixture (baseTier.ID)
 							Name:                "Base",                   // From DATABASE fixture (baseTier)
 							Level:               0,                        // From DATABASE fixture
 							QualificationPoints: 0,                        // From DATABASE fixture
 							EvaluationDays:      365,                      // System default
 							EarnRateMultiplier:  1.0,                      // From DATABASE fixture
-							Description:         resp.Customer.Tier.Description, // From DATABASE fixture
+							Description:         "Base tier for testing",  // From DATABASE fixture (CreateTestTier default)
 						},
 						CreatedAt: resp.Customer.CreatedAt, // Generated (truly random)
 						UpdatedAt: resp.Customer.UpdatedAt, // Generated (truly random)
@@ -504,7 +504,7 @@ func TestListTiersSupport(t *testing.T) {
 				QualificationPoints: 0,                // From DATABASE fixture
 				EvaluationDays:      365,              // System default
 				EarnRateMultiplier:  1.0,              // From DATABASE fixture
-				Description:         resp.Tiers[0].Description, // From DATABASE fixture
+				Description:         "Base tier for testing", // From DATABASE fixture (CreateTestTier default)
 			},
 			{
 				Id:                  resp.Tiers[1].Id, // Generated (from DB)
@@ -513,7 +513,7 @@ func TestListTiersSupport(t *testing.T) {
 				QualificationPoints: 500,              // From DATABASE fixture
 				EvaluationDays:      365,              // System default
 				EarnRateMultiplier:  1.25,             // From DATABASE fixture
-				Description:         resp.Tiers[1].Description, // From DATABASE fixture
+				Description:         "Base tier for testing", // From DATABASE fixture (CreateTestTier default)
 			},
 			{
 				Id:                  resp.Tiers[2].Id, // Generated (from DB)
@@ -522,7 +522,7 @@ func TestListTiersSupport(t *testing.T) {
 				QualificationPoints: 1000,             // From DATABASE fixture
 				EvaluationDays:      365,              // System default
 				EarnRateMultiplier:  1.5,              // From DATABASE fixture
-				Description:         resp.Tiers[2].Description, // From DATABASE fixture
+				Description:         "Base tier for testing", // From DATABASE fixture (CreateTestTier default)
 			},
 		},
 	}
