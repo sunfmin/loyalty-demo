@@ -381,3 +381,89 @@ func TestGetCustomerStatus(t *testing.T) {
 	}
 }
 
+func TestListTiers(t *testing.T) {
+	// Setup test database
+	db, cleanup := testutil.SetupTestDB(t)
+	defer cleanup()
+	defer testutil.TruncateTables(db, "membership_tiers")
+
+	// Create multiple tiers in various orders
+	testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Gold",
+		"level":                2,
+		"qualification_points": int64(1000),
+		"earn_rate_multiplier": 1.5,
+	})
+	testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Base",
+		"level":                0,
+		"qualification_points": int64(0),
+		"earn_rate_multiplier": 1.0,
+	})
+	testutil.CreateTestTier(db, map[string]interface{}{
+		"name":                 "Silver",
+		"level":                1,
+		"qualification_points": int64(500),
+		"earn_rate_multiplier": 1.25,
+	})
+
+	// Test case
+	req := httptest.NewRequest(http.MethodGet, "/v1/loyalty/tiers", nil)
+	rec := httptest.NewRecorder()
+
+	// Create service and handler
+	loyaltyService := services.NewLoyaltyService(db)
+	handler := NewEnrollmentHandler(loyaltyService)
+
+	// Call handler
+	handler.HandleListTiers(rec, req)
+
+	// Verify response status
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+
+	// Parse and validate response
+	var resp loyaltyv1.ListTiersResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Build expected response from FIXTURE data
+	expected := &loyaltyv1.ListTiersResponse{
+		Tiers: []*loyaltyv1.Tier{
+			{
+				Id:                  resp.Tiers[0].Id, // Use from response
+				Name:                "Base",
+				Level:               0,
+				QualificationPoints: 0,
+				EvaluationDays:      365,
+				EarnRateMultiplier:  1.0,
+				Description:         resp.Tiers[0].Description,
+			},
+			{
+				Id:                  resp.Tiers[1].Id,
+				Name:                "Silver",
+				Level:               1,
+				QualificationPoints: 500,
+				EvaluationDays:      365,
+				EarnRateMultiplier:  1.25,
+				Description:         resp.Tiers[1].Description,
+			},
+			{
+				Id:                  resp.Tiers[2].Id,
+				Name:                "Gold",
+				Level:               2,
+				QualificationPoints: 1000,
+				EvaluationDays:      365,
+				EarnRateMultiplier:  1.5,
+				Description:         resp.Tiers[2].Description,
+			},
+		},
+	}
+
+	// Compare using protocmp (MANDATORY per constitution)
+	if diff := cmp.Diff(expected, &resp, protocmp.Transform()); diff != "" {
+		t.Errorf("Response mismatch (-want +got):\n%s", diff)
+	}
+}

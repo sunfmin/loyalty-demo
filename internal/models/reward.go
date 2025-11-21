@@ -20,7 +20,7 @@ type Reward struct {
 	Description string     `gorm:"type:text"`
 	Type        RewardType `gorm:"type:varchar(20);not null"`
 	PointCost   int64      `gorm:"not null;index"`
-	IsActive    bool       `gorm:"not null;default:true;index"`
+	IsActive    bool       `gorm:"not null;index"` // Removed default:true to allow explicit false values
 	Metadata    string     `gorm:"type:jsonb"` // Flexible data (discount %, product ID, etc.)
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
