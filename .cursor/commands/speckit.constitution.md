@@ -47,13 +47,6 @@ Follow this execution flow:
    - Read each command file in `.specify/templates/commands/*.md` (including this one) to verify no outdated references (agent-specific names like CLAUDE only) remain when generic guidance is required.
    - Read any runtime guidance docs (e.g., `README.md`, `docs/quickstart.md`, or agent-specific guidance files if present). Update references to principles changed.
 
-5. Produce a Sync Impact Report (prepend as an HTML comment at top of the constitution file after update):
-   - Version change: old → new
-   - List of modified principles (old title → new title if renamed)
-   - Added sections
-   - Removed sections
-   - Templates requiring updates (✅ updated / ⚠ pending) with file paths
-   - Follow-up TODOs if any placeholders intentionally deferred.
 
 6. Validation before final output:
    - No remaining unexplained bracket tokens.

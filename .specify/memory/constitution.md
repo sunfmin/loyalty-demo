@@ -1,55 +1,62 @@
 <!--
 SYNC IMPACT REPORT - Constitution Update
 
-Version Change: 1.1.0 → 1.2.0
+Version Change: 1.2.0 → 1.3.0
 
 Modified Principles:
 - None (existing principles unchanged)
 
 Added Sections:
-- NEW Principle XII: Root Cause Tracing (Debugging Discipline)
-  - Mandates tracing problems backward through call chain to original trigger
-  - Requires fixing at source, not working around symptoms
-  - Prevents weakening tests or test expectations to accommodate broken behavior
-  - Enforces rigorous debugging methodology
+- NEW Principle XIII: Acceptance Scenario Coverage (Spec-to-Test Mapping)
+  - Mandates one-to-one mapping between spec acceptance scenarios and integration tests
+  - Requires every "Given/When/Then" scenario to have a corresponding test case
+  - MUST use table-driven test design (aligns with Principle II)
+  - MUST use protocmp for protobuf assertions (aligns with Principle VI)
+  - Enforces traceability from requirements to test coverage
+  - Prevents specification drift where documented scenarios lack test validation
+  - Ensures acceptance criteria are actually tested, not just documented
 
 Removed Sections:
 - None
 
 Templates Requiring Updates:
-- ✅ tasks-template.md - UPDATED (added root cause tracing troubleshooting section with examples and methodology)
-- ✅ checklist-template.md - UPDATED (added 12-item Root Cause Tracing checklist section)
-- ✅ constitution.md - UPDATED (added Principle XII with complete guidance)
+- ✅ spec-template.md - UPDATED (added acceptance scenario testing requirements with US#-AS# labeling)
+- ✅ tasks-template.md - UPDATED (added acceptance scenario testing tasks and validation phase)
+- ✅ constitution.md - UPDATED (added Principle XIII with complete guidance and examples)
 
-Documentation Updates:
-- ✅ README.md - CREATED (version 1.2.0, includes all 12 principles, root cause tracing guidance)
+Template Analysis:
+- spec-template.md: Added scenario ID format [US#-AS#] and traceability guidance
+- tasks-template.md: Added scenario testing tasks and acceptance scenario validation phase
+- plan-template.md: No changes needed (doesn't define tests)
 
-Real-World Application (Demonstrated):
-- Problem: Inactive rewards showing as active in database despite IsActive: false in Go
-- Symptom Fix Attempted: Removed test case, weakened expectations (REJECTED per new principle)
-- Root Cause Traced: GORM model had `default:true` → PostgreSQL overrode struct value
-- Proper Fix Applied: Removed `default:true` from model definition (internal/models/reward.go line 23)
-- Result: All tests pass with proper expectations, inactive rewards work correctly
-- Tests Verified: 39/39 passing (100% pass rate)
-- Documentation: ROOT_CAUSE_FIX_REPORT.md created with complete analysis
+Key Features of Principle XIII:
+- Table-driven test design for acceptance scenarios (aligns with Principle II)
+- Protocmp for all protobuf assertions (aligns with Principle VI)
+- Test case `name` field must reference scenario ID (e.g., "US1-AS1: New customer enrolls")
+- One test function per user story/feature grouping related scenarios
+- Optional traceability matrix (recommended but not mandatory)
+- Complete examples showing correct table-driven pattern with protocmp
 
 Follow-up TODOs:
 - None - all dependent artifacts updated
 
 Change Type: MINOR (new principle added)
-Rationale: Adding root cause tracing as a non-negotiable principle ensures problems are fixed properly
-at their source rather than worked around. This prevents accumulation of technical debt and fragile
-workarounds. This is a material expansion of debugging discipline that fundamentally changes how
-developers and AI agents approach problem-solving.
+Rationale: Adding acceptance scenario coverage as a non-negotiable principle ensures that documented
+acceptance criteria are actually validated by tests. This creates explicit traceability from
+specification to implementation to testing, preventing the common problem where specs document
+scenarios that are never actually tested. This is a material expansion of testing discipline that
+fundamentally changes how specifications translate to test coverage. The principle explicitly
+requires table-driven tests and protocmp to ensure consistency with existing constitutional standards.
 
 ---
 
-Version: 1.2.0
-Date: 2025-11-20
-Changes: Added Principle XII (Root Cause Tracing) - MINOR version bump
-Rationale: Enforce rigorous debugging discipline to fix problems at source, not symptoms
-Status: Active - mandates root cause analysis before implementing fixes
-Previous Versions: 
+Version: 1.3.0
+Date: 2025-11-21
+Changes: Added Principle XIII (Acceptance Scenario Coverage) with table-driven and protocmp requirements - MINOR version bump
+Rationale: Enforce one-to-one mapping between spec acceptance scenarios and integration tests using constitutional testing standards
+Status: Active - mandates complete acceptance scenario coverage in tests with table-driven design
+Previous Versions:
+  - 1.2.0 (2025-11-20) - Added Principle XII (Root Cause Tracing)
   - 1.1.0 (2025-11-20) - Added Principle XI (Continuous Test Verification)
   - 1.0.0 (2025-11-20) - Initial release
 -->
@@ -1601,6 +1608,274 @@ Verification: All tests pass with correct expectations
 - AI agents MUST preserve test integrity - never weaken tests to make them pass
 - AI agents MUST explain the root cause to users when reporting fixes
 
+### XIII. Acceptance Scenario Coverage (Spec-to-Test Mapping)
+
+Every acceptance scenario defined in the feature specification MUST have a corresponding integration test:
+- Each "Given/When/Then" scenario in spec.md MUST map to at least one test case
+- Test case names MUST reference the corresponding acceptance scenario (e.g., "US1-AS1: New customer enrolls")
+- Acceptance scenarios MUST NOT be documented without corresponding test validation
+- Tests MUST validate the complete acceptance criteria, not partial behavior
+- When specifications are updated with new scenarios, tests MUST be added before implementation
+- Test coverage reports SHOULD include acceptance scenario traceability matrix (optional but recommended)
+- Code reviews MUST verify one-to-one mapping between spec scenarios and tests
+- AI agents MUST create tests for ALL acceptance scenarios when implementing features
+- **Acceptance scenario tests MUST follow table-driven test design (Principle II)**
+- **Acceptance scenario tests MUST use `cmp.Diff()` with `protocmp.Transform()` for protobuf assertions (Principle VI)**
+
+**Acceptance Scenario Mapping Requirements**:
+1. **Complete Coverage**: Every scenario MUST be tested
+   - If a scenario is deferred, mark it explicitly in spec as `[DEFERRED]` with justification
+   - Track untested scenarios as technical debt with issue tickets
+2. **Scenario-Driven Test Design**: Structure tests around acceptance scenarios using **table-driven pattern**
+   - Each user story section in spec corresponds to a test file or test group
+   - Test function name references feature/user story (e.g., `TestEnrollmentAcceptanceScenarios`)
+   - **Group related acceptance scenarios into table-driven test cases**
+   - Each test case in the table represents one acceptance scenario
+   - Test case `name` field MUST reference scenario ID (e.g., "US1-AS1: New customer enrolls")
+   - Test case `scenario` field SHOULD include Given/When/Then for documentation
+3. **Validation Completeness**: Tests MUST validate all aspects of the scenario
+   - Don't just test happy path if scenario includes error conditions
+   - Verify all "Then" clauses in the acceptance scenario
+   - **Use `protocmp.Transform()` for all protobuf message comparisons (MANDATORY)**
+
+**Rationale**: Acceptance scenarios document what the system MUST do from a user perspective. Without corresponding tests, there's no validation that these scenarios actually work. This creates a dangerous gap between documented requirements and tested behavior. By enforcing one-to-one mapping, we ensure that every promised behavior is actually validated, creating true specification-driven development. This prevents specification drift, incomplete implementations, and the common problem where features are "done" but acceptance criteria remain untested. It also makes the codebase self-documenting - reading tests shows exactly which acceptance scenarios are validated.
+
+**Examples**:
+
+**Spec Acceptance Scenarios (User Story 1 - Enrollment)**:
+```markdown
+### User Story 1 - Customer Enrollment (Priority: P1)
+
+**Acceptance Scenarios**:
+
+1. **Given** a new customer with a valid account, **When** they choose to enroll in the loyalty program, **Then** they receive a confirmation with their membership number and starting point balance of zero
+
+2. **Given** a customer during checkout, **When** they complete their first purchase and opt-in to the loyalty program, **Then** they are automatically enrolled and earn points for that initial purchase
+
+3. **Given** an already enrolled customer, **When** they attempt to enroll again, **Then** the system informs them they are already a member and displays their current status
+```
+
+**✅ CORRECT: Table-Driven Tests with Protocmp (Aligns with Principles II & VI)**:
+```go
+import (
+    "testing"
+    "github.com/google/go-cmp/cmp"
+    "google.golang.org/protobuf/testing/protocmp"
+)
+
+// Test all User Story 1 acceptance scenarios using table-driven design
+func TestEnrollmentAcceptanceScenarios(t *testing.T) {
+    // Setup test database (shared across scenarios)
+    db, cleanup := testutil.SetupTestDB(t)
+    defer cleanup()
+    defer testutil.TruncateTables(db, "customers", "membership_tiers")
+    
+    baseTier := testutil.CreateTestTier(db, map[string]interface{}{
+        "name": "Base",
+        "level": 0,
+    })
+    
+    // Table-driven test cases - one per acceptance scenario
+    testCases := []struct {
+        name              string // Acceptance scenario reference
+        scenario          string // Given/When/Then description
+        accountID         string
+        setupFixtures     func()
+        request           *pb.EnrollCustomerRequest
+        expectedStatus    int
+        expectedError     string
+        validateResponse  func(t *testing.T, resp *pb.EnrollCustomerResponse)
+    }{
+        {
+            name:     "US1-AS1: New customer enrolls with valid account",
+            scenario: "Given new customer, When they enroll, Then confirmation with membership number and zero balance",
+            accountID: "user-001",
+            setupFixtures: func() {}, // No pre-existing data needed
+            request: &pb.EnrollCustomerRequest{},
+            expectedStatus: http.StatusCreated,
+            validateResponse: func(t *testing.T, resp *pb.EnrollCustomerResponse) {
+                // Build expected from REQUEST data (Principle VI requirement)
+                expected := &pb.EnrollCustomerResponse{
+                    Customer: &pb.Customer{
+                        Id:               resp.Customer.Id,               // Generated
+                        AccountId:        "user-001",                     // From request context
+                        MembershipNumber: resp.Customer.MembershipNumber, // Generated
+                        ReferralCode:     resp.Customer.ReferralCode,     // Generated
+                        CurrentBalance:   0,                              // Initial zero balance
+                        EnrolledAt:       resp.Customer.EnrolledAt,       // Generated
+                        Tier:             resp.Customer.Tier,             // From baseTier
+                        CreatedAt:        resp.Customer.CreatedAt,        // Generated
+                        UpdatedAt:        resp.Customer.UpdatedAt,        // Generated
+                    },
+                }
+                
+                // Use protocmp for comparison (Principle VI - MANDATORY)
+                if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
+                    t.Errorf("Response mismatch (-want +got):\n%s", diff)
+                }
+                
+                // Additional validations for "Then" clause
+                if resp.Customer.MembershipNumber == "" {
+                    t.Error("Expected membership number in confirmation")
+                }
+                if resp.Customer.CurrentBalance != 0 {
+                    t.Errorf("Expected zero starting balance, got %d", resp.Customer.CurrentBalance)
+                }
+            },
+        },
+        {
+            name:     "US1-AS2: Customer during checkout enrolls and earns points",
+            scenario: "Given customer at checkout, When they opt-in and purchase, Then enrolled with points earned",
+            accountID: "user-002",
+            setupFixtures: func() {},
+            request: &pb.EnrollCustomerRequest{},
+            expectedStatus: http.StatusCreated,
+            validateResponse: func(t *testing.T, resp *pb.EnrollCustomerResponse) {
+                // First validate enrollment
+                if resp.Customer == nil {
+                    t.Fatal("Expected customer in response")
+                }
+                
+                // Then simulate purchase and verify points earned
+                earnReq := &pb.EarnPointsRequest{
+                    Amount:      5000, // $50.00
+                    ReferenceId: "order-first-001",
+                }
+                earnResp, err := pointsHandler.EarnPoints("user-002", earnReq)
+                if err != nil {
+                    t.Fatalf("Expected points earned, got error: %v", err)
+                }
+                
+                // Build expected using protocmp
+                expectedEarn := &pb.EarnPointsResponse{
+                    Transaction: &pb.PointTransaction{
+                        Id:            earnResp.Transaction.Id,
+                        CustomerId:    resp.Customer.Id,
+                        Amount:        earnResp.Transaction.Amount, // Calculated
+                        Type:          pb.TransactionType_TRANSACTION_TYPE_EARN,
+                        ReferenceId:   "order-first-001",
+                        CreatedAt:     earnResp.Transaction.CreatedAt,
+                        ExpiresAt:     earnResp.Transaction.ExpiresAt,
+                    },
+                    NewBalance: earnResp.NewBalance,
+                }
+                
+                if diff := cmp.Diff(expectedEarn, earnResp, protocmp.Transform()); diff != "" {
+                    t.Errorf("Earn points response mismatch (-want +got):\n%s", diff)
+                }
+            },
+        },
+        {
+            name:     "US1-AS3: Already enrolled customer attempts re-enrollment",
+            scenario: "Given enrolled customer, When they enroll again, Then informed already member",
+            accountID: "user-003",
+            setupFixtures: func() {
+                // Create already-enrolled customer
+                testutil.CreateTestCustomer(db, map[string]interface{}{
+                    "account_id": "user-003",
+                    "tier_id":    &baseTier.ID,
+                })
+            },
+            request: &pb.EnrollCustomerRequest{},
+            expectedStatus: http.StatusConflict,
+            expectedError:  "ALREADY_ENROLLED",
+        },
+    }
+    
+    // Execute all acceptance scenarios
+    for _, tc := range testCases {
+        t.Run(tc.name, func(t *testing.T) {
+            // Setup fixtures for this scenario
+            tc.setupFixtures()
+            
+            // Create HTTP request
+            body, _ := json.Marshal(tc.request)
+            req := httptest.NewRequest(http.MethodPost, "/v1/loyalty/enroll", bytes.NewReader(body))
+            req.Header.Set("Content-Type", "application/json")
+            
+            // Add authentication context
+            ctx := context.WithValue(req.Context(), middleware.UserIDKey, tc.accountID)
+            req = req.WithContext(ctx)
+            
+            rec := httptest.NewRecorder()
+            
+            // Call handler (full HTTP stack)
+            handler.HandleEnroll(rec, req)
+            
+            // Verify HTTP status
+            if rec.Code != tc.expectedStatus {
+                t.Errorf("Expected status %d, got %d", tc.expectedStatus, rec.Code)
+            }
+            
+            // For success cases, validate response
+            if tc.expectedStatus == http.StatusCreated && tc.validateResponse != nil {
+                var resp pb.EnrollCustomerResponse
+                json.NewDecoder(rec.Body).Decode(&resp)
+                tc.validateResponse(t, &resp)
+            }
+            
+            // For error cases, validate error code
+            if tc.expectedError != "" {
+                var errResp map[string]interface{}
+                json.NewDecoder(rec.Body).Decode(&errResp)
+                if errResp["code"] != tc.expectedError {
+                    t.Errorf("Expected error code %s, got %v", tc.expectedError, errResp["code"])
+                }
+            }
+        })
+    }
+}
+```
+
+**❌ WRONG: Not Following Table-Driven Pattern or Protocmp**:
+```go
+// ❌ WRONG: Individual test functions instead of table-driven (violates Principle II)
+// ❌ WRONG: Using individual field comparisons instead of protocmp (violates Principle VI)
+// ❌ WRONG: Missing AS2 and AS3 scenarios
+
+func TestEnrollCustomer(t *testing.T) {
+    req := &pb.EnrollCustomerRequest{}
+    resp, err := handler.Enroll("user-001", req)
+    
+    if err != nil {
+        t.Fatal(err)
+    }
+    
+    // ❌ WRONG: Individual field checks instead of protocmp.Transform()
+    if resp.Customer.MembershipNumber == "" {
+        t.Error("Expected membership number")
+    }
+    if resp.Customer.CurrentBalance != 0 {
+        t.Error("Expected zero balance")
+    }
+    // ❌ Missing: cmp.Diff() with protocmp.Transform() for complete validation
+}
+
+// ❌ Missing: US1-AS2 (first purchase enrollment) - NOT tested
+// ❌ Missing: US1-AS3 (already enrolled) - NOT tested
+// ❌ Missing: Table-driven test structure
+// ❌ Missing: Scenario references in test names
+```
+
+**AI Agent Requirements**:
+- AI agents MUST read acceptance scenarios from spec.md before writing tests
+- AI agents MUST create one test case per acceptance scenario (minimum) in table-driven test
+- AI agents MUST use test case `name` field with scenario reference (e.g., "US1-AS1: New customer enrolls")
+- AI agents MUST use table-driven test design with test case structs
+- AI agents SHOULD include `scenario` field in test case struct with Given/When/Then for documentation
+- AI agents SHOULD generate traceability matrix showing scenario-to-test mapping (optional but recommended)
+- AI agents MUST flag any scenarios that cannot be tested with justification
+- AI agents MUST update tests when specifications change to add/modify scenarios
+
+**Code Review Checklist**:
+- [ ] Every acceptance scenario in spec.md has a corresponding test case
+- [ ] Test case names in table reference source scenarios (e.g., "US1-AS1: New customer enrolls")
+- [ ] Test function uses table-driven design with test case structs
+- [ ] Test case struct includes `name` field with scenario ID (US#-AS#)
+- [ ] No untested scenarios exist (or are explicitly deferred with justification)
+- [ ] Test validates complete "Then" clause, not partial behavior
+- [ ] Traceability matrix is up to date (optional but recommended)
+
 
 ## Technology Stack
 
@@ -1968,6 +2243,15 @@ All pull requests MUST be reviewed against these constitutional requirements, or
 - Reviewers MUST challenge "quick fixes" that lack root cause understanding
 - PR description MUST include root cause trace for debugging work
 
+**Principle XIII: Acceptance Scenario Coverage**
+- Reviewers MUST verify every acceptance scenario in spec.md has a corresponding test case
+- Reviewers MUST verify table-driven test design is used for acceptance scenarios
+- Reviewers MUST verify test case names reference source scenarios (US#-AS# in `name` field)
+- Reviewers MUST reject implementations with untested acceptance scenarios (unless explicitly deferred with justification)
+- Reviewers MUST verify tests validate complete "Then" clauses, not partial behavior
+- PR description MUST include acceptance scenario coverage summary
+- Reviewers SHOULD verify traceability matrix is up to date if provided (optional but recommended)
+
 **General**
 - Tests MUST be reviewed before implementation code (TDD workflow)
 - Reviewers MUST verify GORM is used for database access (no raw SQL unless justified)
@@ -1997,9 +2281,10 @@ All pull requests MUST be reviewed against these constitutional requirements, or
 
 This constitution is version-controlled alongside code and follows the same review process as code changes.
 
-**Version**: 1.2.0 | **Ratified**: 2025-11-20 | **Last Amended**: 2025-11-20
+**Version**: 1.3.0 | **Ratified**: 2025-11-20 | **Last Amended**: 2025-11-21
 
 **Version History**:
+- **1.3.0** (2025-11-21): Added Principle XIII (Acceptance Scenario Coverage) - requires one-to-one mapping between spec acceptance scenarios and integration tests using table-driven design and protocmp
 - **1.2.0** (2025-11-20): Added Principle XII (Root Cause Tracing) - requires debugging problems at source, not symptoms
 - **1.1.0** (2025-11-20): Added Principle XI (Continuous Test Verification) - requires running tests after all code changes
 - **1.0.0** (2025-11-20): Initial release with 10 core principles for Go API development

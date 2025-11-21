@@ -4,7 +4,7 @@ A production-grade loyalty program API built with Go, following strict constitut
 
 **Version**: 1.0.0  
 **Status**: Production Ready (User Stories 1-4 Complete)  
-**Constitution**: v1.2.0 (12 principles)
+**Constitution**: v1.3.0 (13 principles)
 
 ---
 
@@ -224,7 +224,7 @@ loyalty-demo/
 
 ## Constitutional Principles
 
-This project follows a strict constitution with **12 core principles**:
+This project follows a strict constitution with **13 core principles**:
 
 1. ✅ **Integration Testing First** - Real database, no mocks
 2. ✅ **Table-Driven Test Design** - Comprehensive test cases
@@ -238,6 +238,7 @@ This project follows a strict constitution with **12 core principles**:
 10. ✅ **Context-Aware Operations** - Timeout and cancellation support
 11. ✅ **Continuous Test Verification** - Tests run after every change
 12. ✅ **Root Cause Tracing** - Fix problems at source, not symptoms
+13. ✅ **Acceptance Scenario Coverage** - One-to-one spec-to-test mapping
 
 See `.specify/memory/constitution.md` for complete details.
 
@@ -350,7 +351,7 @@ export SERVER_PORT=8080
 
 ### Code Quality Requirements
 
-All code MUST comply with the 12 constitutional principles:
+All code MUST comply with the 13 constitutional principles:
 
 1. **Integration tests** with real PostgreSQL (testcontainers)
 2. **Table-driven** test patterns
@@ -361,6 +362,7 @@ All code MUST comply with the 12 constitutional principles:
 7. **Error handling** with sentinel errors
 8. **Test verification** after every change
 9. **Root cause fixes** only (no symptom fixes)
+10. **Acceptance scenario coverage** - every spec scenario has a test
 
 ### Running Quality Checks
 
@@ -396,6 +398,6 @@ All checks must pass before PR approval.
 
 ---
 
-**Constitution Version**: 1.2.0  
-**Last Updated**: November 20, 2025
+**Constitution Version**: 1.3.0  
+**Last Updated**: November 21, 2025
 
