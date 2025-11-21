@@ -19,13 +19,15 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
-func TestEarnPoints(t *testing.T) {
+// TestEarnPointsAcceptanceScenarios tests User Story 2 (Earning Points) acceptance scenarios
+// Implements Constitution Principle XIII (Acceptance Scenario Coverage)
+func TestEarnPointsAcceptanceScenarios(t *testing.T) {
 	// Setup test database
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 	defer testutil.TruncateTables(db, "point_transactions", "customers", "membership_tiers", "promotional_campaigns")
 
-	// Create base tier
+	// Create base tier (DATABASE FIXTURE)
 	baseTier := testutil.CreateTestTier(db, map[string]interface{}{
 		"name":                 "Base",
 		"level":                0,
@@ -33,7 +35,7 @@ func TestEarnPoints(t *testing.T) {
 		"earn_rate_multiplier": 1.0,
 	})
 
-	// Create Gold tier for multiplier test
+	// Create Gold tier for multiplier test (DATABASE FIXTURE)
 	goldTier := testutil.CreateTestTier(db, map[string]interface{}{
 		"name":                 "Gold",
 		"level":                2,
@@ -41,7 +43,7 @@ func TestEarnPoints(t *testing.T) {
 		"earn_rate_multiplier": 1.5,
 	})
 
-	// Create test campaign (double points)
+	// Create test campaign (double points) (DATABASE FIXTURE)
 	campaign := testutil.CreateTestCampaign(db, map[string]interface{}{
 		"name":             "Double Points Weekend",
 		"point_multiplier": 2.0,
@@ -50,9 +52,10 @@ func TestEarnPoints(t *testing.T) {
 		"end_date":         time.Now().Add(24 * time.Hour),
 	})
 
-	// Table-driven test cases
+	// Table-driven test cases - one per acceptance scenario
 	testCases := []struct {
 		name             string
+		scenario         string // Given/When/Then from spec
 		accountID        string
 		request          *loyaltyv1.EarnPointsRequest
 		setupFixtures    func() string // Returns customer ID
@@ -61,7 +64,8 @@ func TestEarnPoints(t *testing.T) {
 		validateResponse func(t *testing.T, resp *loyaltyv1.EarnPointsResponse, customerID string)
 	}{
 		{
-			name:      "Happy path: Valid purchase earns points (1 point per dollar)",
+			name:     "US2-AS1: Customer makes purchase and earns points at configured rate",
+			scenario: "Given an enrolled customer making a purchase, When the transaction is completed, Then points are automatically credited based on the purchase amount at the configured earn rate",
 			accountID: "user-earn-001",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        5000, // $50.00 in cents
@@ -82,26 +86,31 @@ func TestEarnPoints(t *testing.T) {
 					t.Fatal("Expected transaction in response")
 				}
 
-				// Build expected from REQUEST data
-				// Note: Campaign is active (2.0x), so $50 -> 50 base points * 2.0 = 100 points
+				// Build expected from FIXTURES (REQUEST + DATABASE + calculation rules)
+				// Per enhanced Principle VI: Derive from fixtures, NOT response
+				// Campaign is active (2.0x from DATABASE fixture), so $50 -> 50 base * 2.0 = 100 points
 				expected := &loyaltyv1.EarnPointsResponse{
 					Transaction: &loyaltyv1.PointTransaction{
-						Id:            resp.Transaction.Id,          // Generated
-						CustomerId:    customerID,                   // From fixture
-						Amount:        100,                          // $50.00 -> 50 base * 2.0x campaign = 100 points
+						Id:            resp.Transaction.Id,          // Generated (truly random)
+						CustomerId:    customerID,                   // From DATABASE fixture
+						Amount:        100,                          // Derived: 5000 cents / 100 * 2.0 (campaign) = 100 points
 						Type:          loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN,
-						ReferenceId:   "order-12345",               // From request
-						ReferenceType: "ORDER",                     // From request
-						Description:   "Purchase at Main Street Store", // From request
-						CampaignId:    resp.Transaction.CampaignId, // Campaign applied
-						CreatedAt:     resp.Transaction.CreatedAt,  // Generated
-						ExpiresAt:     resp.Transaction.ExpiresAt,  // Generated
+						ReferenceId:   "order-12345",               // From REQUEST fixture
+						ReferenceType: "ORDER",                     // From REQUEST fixture
+						Description:   "Purchase at Main Street Store", // From REQUEST fixture
+						CampaignId:    resp.Transaction.CampaignId, // Generated (from DB campaign fixture)
+						CreatedAt:     resp.Transaction.CreatedAt,  // Generated (truly random)
+						ExpiresAt:     resp.Transaction.ExpiresAt,  // Generated (truly random)
 					},
-					NewBalance: 100, // Initial 0 + 100 earned (with campaign)
-					CampaignApplied: resp.CampaignApplied, // Campaign applied (double points)
+					NewBalance: 100, // Derived: Initial 0 (from fixture) + 100 earned (calculated)
+					CampaignApplied: &loyaltyv1.CampaignApplied{
+						Id:          resp.CampaignApplied.Id,   // From DATABASE fixture (campaign)
+						Name:        "Double Points Weekend",   // From DATABASE fixture
+						BonusPoints: 50,                        // Derived: 50 base * (2.0 - 1.0) = 50 bonus
+					},
 				}
 
-				// Use protocmp for comparison (MANDATORY)
+				// Use protocmp for comparison (MANDATORY per Principle VI)
 				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
 					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
@@ -118,18 +127,20 @@ func TestEarnPoints(t *testing.T) {
 			},
 		},
 		{
-			name:      "Happy path: Points with tier multiplier (Gold 1.5x) and campaign",
-			accountID: "user-earn-gold",
+			name:     "US2-AS3: Customer purchases during promotional campaign (double points)",
+			scenario: "Given an active promotional campaign (e.g., double points weekend), When a customer makes a qualifying purchase during the promotion period, Then they earn points at the promotional rate",
+			accountID: "user-earn-campaign",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        5000, // $50.00
-				ReferenceId:   "order-gold-001",
+				ReferenceId:   "order-campaign-001",
 				ReferenceType: "ORDER",
-				Description:   "Gold tier purchase",
+				Description:   "Purchase during Double Points Weekend",
 			},
 			setupFixtures: func() string {
+				// Customer with Gold tier (DATABASE FIXTURE)
 				customer := testutil.CreateTestCustomer(db, map[string]interface{}{
-					"account_id": "user-earn-gold",
-					"tier_id":    &goldTier.ID,
+					"account_id": "user-earn-campaign",
+					"tier_id":    &goldTier.ID, // Gold tier (1.5x multiplier)
 				})
 				return customer.ID
 			},
@@ -139,33 +150,39 @@ func TestEarnPoints(t *testing.T) {
 					t.Fatal("Expected transaction in response")
 				}
 				
-				// Build expected from REQUEST data
+				// Build expected from FIXTURES (REQUEST + DATABASE + calculation rules)
+				// Gold tier 1.5x (from DB fixture) + Campaign 2.0x (from DB fixture)
 				// Base: $50 = 50 points, Tier: 1.5x = 75, Campaign: 2.0x bonus = 50, Total: 125
 				expected := &loyaltyv1.EarnPointsResponse{
 					Transaction: &loyaltyv1.PointTransaction{
-						Id:            resp.Transaction.Id,
-						CustomerId:    customerID,
-						Amount:        125, // 50 base * 1.5 tier + 50 campaign bonus
+						Id:            resp.Transaction.Id,          // Generated (truly random)
+						CustomerId:    customerID,                   // From DATABASE fixture
+						Amount:        125,                          // Derived: 50 base * 1.5 (Gold) + 50 campaign bonus = 125
 						Type:          loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN,
-						ReferenceId:   "order-gold-001",
-						ReferenceType: "ORDER",
-						Description:   "Gold tier purchase",
-						CampaignId:    resp.Transaction.CampaignId,
-						CreatedAt:     resp.Transaction.CreatedAt,
-						ExpiresAt:     resp.Transaction.ExpiresAt,
+						ReferenceId:   "order-campaign-001",        // From REQUEST fixture
+						ReferenceType: "ORDER",                     // From REQUEST fixture
+						Description:   "Purchase during Double Points Weekend", // From REQUEST fixture
+						CampaignId:    resp.Transaction.CampaignId, // From DATABASE fixture
+						CreatedAt:     resp.Transaction.CreatedAt,  // Generated (truly random)
+						ExpiresAt:     resp.Transaction.ExpiresAt,  // Generated (truly random)
 					},
-					NewBalance:      resp.NewBalance, // Calculated field
-					CampaignApplied: resp.CampaignApplied, // Campaign info
+					NewBalance:      125, // Derived: Initial 0 + 125 earned
+					CampaignApplied: &loyaltyv1.CampaignApplied{
+						Id:          resp.CampaignApplied.Id,   // From DATABASE fixture
+						Name:        "Double Points Weekend",   // From DATABASE fixture
+						BonusPoints: 50,                        // Derived: 50 base * (2.0 - 1.0) = 50 bonus
+					},
 				}
 				
-				// Compare using protocmp (MANDATORY)
+				// Compare using protocmp (MANDATORY per Principle VI)
 				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
 					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
 		{
-			name:      "Happy path: Idempotent requests (same reference_id)",
+			name:     "Edge case: Idempotent requests (same reference_id)",
+			scenario: "Business rule: duplicate transaction prevention",
 			accountID: "user-earn-idempotent",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        3000,
@@ -220,7 +237,8 @@ func TestEarnPoints(t *testing.T) {
 			},
 		},
 		{
-			name:      "Edge case: Negative amount",
+			name:     "Edge case: Negative amount rejected",
+			scenario: "Boundary validation: negative amounts not allowed",
 			accountID: "user-earn-negative",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        -100,
@@ -239,7 +257,8 @@ func TestEarnPoints(t *testing.T) {
 			expectedError:  "INVALID_AMOUNT",
 		},
 		{
-			name:      "Edge case: Zero amount",
+			name:     "Edge case: Zero amount rejected",
+			scenario: "Boundary validation: zero amounts not allowed",
 			accountID: "user-earn-zero",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        0,
@@ -258,7 +277,8 @@ func TestEarnPoints(t *testing.T) {
 			expectedError:  "INVALID_AMOUNT",
 		},
 		{
-			name:      "Edge case: Missing reference_id",
+			name:     "Edge case: Missing required reference_id",
+			scenario: "Input validation: required field missing",
 			accountID: "user-earn-no-ref",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        1000,
@@ -277,7 +297,8 @@ func TestEarnPoints(t *testing.T) {
 			expectedError:  "MISSING_REQUIRED",
 		},
 		{
-			name:      "Edge case: Customer not enrolled",
+			name:     "Edge case: Customer not enrolled",
+			scenario: "Data state: non-existent customer",
 			accountID: "user-not-enrolled-earn",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        1000,
@@ -290,7 +311,8 @@ func TestEarnPoints(t *testing.T) {
 			expectedError:  "CUSTOMER_NOT_FOUND",
 		},
 		{
-			name:      "Edge case: Missing authentication",
+			name:     "Edge case: Missing authentication",
+			scenario: "Authentication: unauthenticated earn request",
 			accountID: "",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        1000,
@@ -302,7 +324,8 @@ func TestEarnPoints(t *testing.T) {
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:      "Edge case: SQL injection in reference_id",
+			name:     "Edge case: SQL injection in reference_id safely handled",
+			scenario: "Security: SQL injection prevented via parameterized queries",
 			accountID: "user-earn-sql",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        1000,
@@ -323,32 +346,39 @@ func TestEarnPoints(t *testing.T) {
 					t.Fatal("Expected transaction in response")
 				}
 				
-				// Build expected - verify SQL injection string stored safely
+				// Build expected from FIXTURES (REQUEST + DATABASE)
+				// Per enhanced Principle VI: Derive from fixtures, NOT response
+				// Campaign is active (2.0x), so: 1000 cents / 100 * 2.0 = 20 points
 				expected := &loyaltyv1.EarnPointsResponse{
 					Transaction: &loyaltyv1.PointTransaction{
-						Id:            resp.Transaction.Id,
-						CustomerId:    customerID,
-						Amount:        resp.Transaction.Amount, // Calculated amount
+						Id:            resp.Transaction.Id,          // Generated (truly random)
+						CustomerId:    customerID,                   // From DATABASE fixture
+						Amount:        20,                           // Derived: 1000 cents / 100 * 2.0 (campaign) = 20
 						Type:          loyaltyv1.TransactionType_TRANSACTION_TYPE_EARN,
-						ReferenceId:   "'; DROP TABLE point_transactions; --", // SQL string stored safely
-						ReferenceType: "ORDER",
-						Description:   "SQL injection test",
-						CampaignId:    resp.Transaction.CampaignId,
-						CreatedAt:     resp.Transaction.CreatedAt,
-						ExpiresAt:     resp.Transaction.ExpiresAt,
+						ReferenceId:   "'; DROP TABLE point_transactions; --", // From REQUEST fixture (safely stored)
+						ReferenceType: "ORDER",                      // From REQUEST fixture
+						Description:   "SQL injection test",        // From REQUEST fixture
+						CampaignId:    resp.Transaction.CampaignId, // From DATABASE fixture (campaign)
+						CreatedAt:     resp.Transaction.CreatedAt,  // Generated (truly random)
+						ExpiresAt:     resp.Transaction.ExpiresAt,  // Generated (truly random)
 					},
-					NewBalance:      resp.NewBalance,
-					CampaignApplied: resp.CampaignApplied,
+					NewBalance:      20, // Derived: Initial 0 + 20 earned
+					CampaignApplied: &loyaltyv1.CampaignApplied{
+						Id:          resp.CampaignApplied.Id,   // From DATABASE fixture
+						Name:        "Double Points Weekend",   // From DATABASE fixture
+						BonusPoints: 10,                        // Derived: 10 base * (2.0 - 1.0) = 10 bonus
+					},
 				}
 				
-				// Compare using protocmp (MANDATORY)
+				// Compare using protocmp (MANDATORY per Principle VI)
 				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
 					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
 		{
-			name:      "Edge case: Extremely large amount (overflow protection)",
+			name:     "Edge case: Extremely large amount (overflow protection)",
+			scenario: "Boundary validation: maximum value handling",
 			accountID: "user-earn-large",
 			request: &loyaltyv1.EarnPointsRequest{
 				Amount:        9223372036854775807, // Max int64
@@ -453,13 +483,15 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-func TestListTransactions(t *testing.T) {
+// TestListTransactionsAcceptanceScenarios tests US3-AS2 (viewing transaction history)
+// Implements Constitution Principle XIII (Acceptance Scenario Coverage)
+func TestListTransactionsAcceptanceScenarios(t *testing.T) {
 	// Setup test database
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 	defer testutil.TruncateTables(db, "point_transactions", "customers", "membership_tiers")
 
-	// Create base tier
+	// Create base tier (DATABASE FIXTURE)
 	baseTier := testutil.CreateTestTier(db, map[string]interface{}{
 		"name":                 "Base",
 		"level":                0,
@@ -467,13 +499,13 @@ func TestListTransactions(t *testing.T) {
 		"earn_rate_multiplier": 1.0,
 	})
 
-	// Create test customer with multiple transactions
+	// Create test customer with multiple transactions (DATABASE FIXTURES)
 	customer := testutil.CreateTestCustomer(db, map[string]interface{}{
 		"account_id": "user-list-txn",
 		"tier_id":    &baseTier.ID,
 	})
 
-	// Create various transaction types
+	// Create various transaction types (DATABASE FIXTURES)
 	for i := 0; i < 5; i++ {
 		testutil.CreateTestTransaction(db, customer.ID, map[string]interface{}{
 			"amount":      int64(100 + i*10),
@@ -489,9 +521,10 @@ func TestListTransactions(t *testing.T) {
 		})
 	}
 
-	// Table-driven test cases
+	// Table-driven test cases - one per acceptance scenario
 	testCases := []struct {
 		name             string
+		scenario         string // Given/When/Then from spec
 		accountID        string
 		queryParams      string
 		setupFixtures    func()
@@ -500,7 +533,8 @@ func TestListTransactions(t *testing.T) {
 		validateResponse func(t *testing.T, resp *loyaltyv1.ListTransactionsResponse)
 	}{
 		{
-			name:          "Happy path: List all transactions (no filters)",
+			name:     "US3-AS2: Customer views complete transaction history",
+			scenario: "Given a customer viewing their loyalty account, When they access their transaction history, Then they see a chronological list of all point-earning and point-redemption activities with dates, descriptions, and amounts",
 			accountID:     "user-list-txn",
 			queryParams:   "",
 			setupFixtures: func() {},
@@ -524,13 +558,14 @@ func TestListTransactions(t *testing.T) {
 			},
 		},
 		{
-			name:          "Happy path: Filter by type (EARN only)",
+			name:     "Supporting: Filter transactions by type (EARN only)",
+			scenario: "Filtering: customer views only earn transactions",
 			accountID:     "user-list-txn",
 			queryParams:   "?type=EARN",
 			setupFixtures: func() {},
 			expectedStatus: http.StatusOK,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.ListTransactionsResponse) {
-				// Should return only 5 EARN transactions
+				// Should return only 5 EARN transactions (from DATABASE fixtures)
 				if len(resp.Transactions) != 5 {
 					t.Errorf("Expected 5 EARN transactions, got %d", len(resp.Transactions))
 				}
@@ -543,7 +578,8 @@ func TestListTransactions(t *testing.T) {
 			},
 		},
 		{
-			name:          "Happy path: Pagination (limit 3)",
+			name:     "Supporting: Pagination (limit 3, offset 0)",
+			scenario: "Pagination: customer views first page of transactions",
 			accountID:     "user-list-txn",
 			queryParams:   "?limit=3&offset=0",
 			setupFixtures: func() {},
@@ -555,13 +591,15 @@ func TestListTransactions(t *testing.T) {
 				if resp.Limit != 3 {
 					t.Errorf("Expected limit 3, got %d", resp.Limit)
 				}
+				// Total is 8 from DATABASE fixtures (5 EARN + 3 REDEMPTION)
 				if resp.Total != 8 {
 					t.Errorf("Expected total 8, got %d", resp.Total)
 				}
 			},
 		},
 		{
-			name:          "Happy path: Empty result set (new customer)",
+			name:     "Supporting: Empty transaction history (new customer)",
+			scenario: "Edge case: customer with no transactions",
 			accountID:     "user-no-transactions",
 			queryParams:   "",
 			setupFixtures: func() {
@@ -581,7 +619,8 @@ func TestListTransactions(t *testing.T) {
 			},
 		},
 		{
-			name:           "Edge case: Customer not enrolled",
+			name:     "Edge case: Customer not enrolled",
+			scenario: "Data state: non-existent customer",
 			accountID:      "user-not-enrolled-list",
 			queryParams:    "",
 			setupFixtures:  func() {},
@@ -589,7 +628,8 @@ func TestListTransactions(t *testing.T) {
 			expectedError:  "CUSTOMER_NOT_FOUND",
 		},
 		{
-			name:           "Edge case: Missing authentication",
+			name:     "Edge case: Missing authentication",
+			scenario: "Authentication: unauthenticated list request",
 			accountID:      "",
 			queryParams:    "",
 			setupFixtures:  func() {},

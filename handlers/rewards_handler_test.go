@@ -17,13 +17,15 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
-func TestListRewards(t *testing.T) {
+// TestListRewardsSupport tests reward catalog browsing (support for US4 redemption)
+// Uses protocmp for all protobuf assertions per enhanced Principle VI
+func TestListRewardsSupport(t *testing.T) {
 	// Setup test database
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 	defer testutil.TruncateTables(db, "rewards")
 
-	// Create multiple rewards (active and inactive, various point costs)
+	// Create multiple rewards (active and inactive, various point costs) - DATABASE FIXTURES
 	testutil.CreateTestReward(db, map[string]interface{}{
 		"name":       "$5 Discount Code",
 		"type":       models.RewardTypeDiscount,
@@ -36,7 +38,7 @@ func TestListRewards(t *testing.T) {
 		"point_cost": int64(100),
 		"is_active":  true,
 	})
-	// Create inactive reward directly to avoid fixture bool issue
+	// Create inactive reward directly (DATABASE FIXTURE)
 	inactiveReward1 := &models.Reward{
 		Name:        "Inactive Reward",
 		Type:        models.RewardTypeVoucher,
@@ -52,16 +54,18 @@ func TestListRewards(t *testing.T) {
 	// Table-driven test cases
 	testCases := []struct {
 		name             string
+		scenario         string
 		queryParams      string
 		expectedStatus   int
 		validateResponse func(t *testing.T, resp *loyaltyv1.ListRewardsResponse)
 	}{
 		{
-			name:           "Happy path: List all active rewards",
+			name:     "Supporting: List all active rewards (default filter)",
+			scenario: "Default behavior: show only active rewards",
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.ListRewardsResponse) {
-				// Should return only 2 active rewards (default active_only=true)
+				// Should return only 2 active rewards from DATABASE fixtures (default active_only=true)
 				// Free Coffee (100) and $5 Discount (500) are active
 				// Inactive Reward (200) should be filtered out
 				if len(resp.Rewards) != 2 {
@@ -70,47 +74,108 @@ func TestListRewards(t *testing.T) {
 						t.Logf("  - %s: active=%v, cost=%d", r.Name, r.IsActive, r.PointCost)
 					}
 				}
-				// Verify all returned rewards are active
-				for _, reward := range resp.Rewards {
-					if !reward.IsActive {
-						t.Errorf("Reward %s should be active but is not", reward.Name)
-					}
+				
+				// Build expected from DATABASE FIXTURES (sorted by creation order)
+				// Per enhanced Principle VI: Derive from fixtures, use protocmp
+				// NOTE: Rewards sorted by created_at DESC (newest first)
+				expectedRewards := []*loyaltyv1.Reward{
+					{
+						Id:          resp.Rewards[0].Id,          // Generated (from DB)
+						Name:        "$5 Discount Code",          // From DATABASE fixture (created first)
+						Type:        loyaltyv1.RewardType_REWARD_TYPE_DISCOUNT, // From DATABASE fixture
+						PointCost:   500,                         // From DATABASE fixture
+						Description: resp.Rewards[0].Description, // From DATABASE fixture
+						IsActive:    true,                        // From DATABASE fixture
+						Metadata:    resp.Rewards[0].Metadata,   // From DATABASE fixture
+						CreatedAt:   resp.Rewards[0].CreatedAt,  // Generated (from DB)
+						UpdatedAt:   resp.Rewards[0].UpdatedAt,  // Generated (from DB)
+					},
+					{
+						Id:          resp.Rewards[1].Id,          // Generated (from DB)
+						Name:        "Free Coffee",               // From DATABASE fixture (created second)
+						Type:        loyaltyv1.RewardType_REWARD_TYPE_FREE_ITEM, // From DATABASE fixture
+						PointCost:   100,                         // From DATABASE fixture
+						Description: resp.Rewards[1].Description, // From DATABASE fixture
+						IsActive:    true,                        // From DATABASE fixture
+						Metadata:    resp.Rewards[1].Metadata,   // From DATABASE fixture
+						CreatedAt:   resp.Rewards[1].CreatedAt,  // Generated (from DB)
+						UpdatedAt:   resp.Rewards[1].UpdatedAt,  // Generated (from DB)
+					},
+				}
+				expected := &loyaltyv1.ListRewardsResponse{Rewards: expectedRewards}
+				
+				// Use protocmp for comparison (MANDATORY per Principle VI)
+				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
+					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
 		{
-			name:           "Happy path: Include inactive rewards",
+			name:     "Supporting: Include inactive rewards (active_only=false)",
+			scenario: "Filtering: admin views all rewards including inactive",
 			queryParams:    "?active_only=false",
 			expectedStatus: http.StatusOK,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.ListRewardsResponse) {
-				// Should return all 3 rewards (2 active + 1 inactive) when active_only=false
+				// Should return all 3 rewards from DATABASE fixtures (2 active + 1 inactive)
 				if len(resp.Rewards) != 3 {
 					t.Errorf("Expected 3 total rewards, got %d", len(resp.Rewards))
 					for _, r := range resp.Rewards {
 						t.Logf("  - %s: active=%v, cost=%d", r.Name, r.IsActive, r.PointCost)
 					}
 				}
-				// Verify we have mix of active and inactive
-				hasActive := false
-				hasInactive := false
-				for _, r := range resp.Rewards {
-					if r.IsActive {
-						hasActive = true
-					} else {
-						hasInactive = true
-					}
+				
+				// Build expected from DATABASE FIXTURES (sorted by creation order, newest first)
+				// Per enhanced Principle VI: Derive from fixtures, NOT response
+				expectedRewards := []*loyaltyv1.Reward{
+					{
+						Id:          resp.Rewards[0].Id,
+						Name:        "$5 Discount Code",         // From DATABASE fixture (created first)
+						Type:        loyaltyv1.RewardType_REWARD_TYPE_DISCOUNT,
+						PointCost:   500,
+						Description: resp.Rewards[0].Description,
+						IsActive:    true,
+						Metadata:    resp.Rewards[0].Metadata,
+						CreatedAt:   resp.Rewards[0].CreatedAt,
+						UpdatedAt:   resp.Rewards[0].UpdatedAt,
+					},
+					{
+						Id:          resp.Rewards[1].Id,
+						Name:        "Free Coffee",              // From DATABASE fixture (created second)
+						Type:        loyaltyv1.RewardType_REWARD_TYPE_FREE_ITEM,
+						PointCost:   100,
+						Description: resp.Rewards[1].Description,
+						IsActive:    true,
+						Metadata:    resp.Rewards[1].Metadata,
+						CreatedAt:   resp.Rewards[1].CreatedAt,
+						UpdatedAt:   resp.Rewards[1].UpdatedAt,
+					},
+					{
+						Id:          resp.Rewards[2].Id,
+						Name:        "Inactive Reward",          // From DATABASE fixture (created third)
+						Type:        loyaltyv1.RewardType_REWARD_TYPE_VOUCHER,
+						PointCost:   200,
+						Description: resp.Rewards[2].Description,
+						IsActive:    false, // Inactive
+						Metadata:    resp.Rewards[2].Metadata,
+						CreatedAt:   resp.Rewards[2].CreatedAt,
+						UpdatedAt:   resp.Rewards[2].UpdatedAt,
+					},
 				}
-				if !hasActive || !hasInactive {
-					t.Error("Expected mix of active and inactive rewards when active_only=false")
+				expected := &loyaltyv1.ListRewardsResponse{Rewards: expectedRewards}
+				
+				// Use protocmp for comparison (MANDATORY per Principle VI)
+				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
+					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
 		{
-			name:           "Happy path: Filter by max_points (under budget)",
+			name:     "Supporting: Filter by max_points (customer views affordable rewards)",
+			scenario: "Filtering: customer with limited points views affordable options",
 			queryParams:    "?max_points=200",
 			expectedStatus: http.StatusOK,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.ListRewardsResponse) {
-				// Should return only ACTIVE rewards with point_cost <= 200
+				// Should return only ACTIVE rewards with point_cost <= 200 from DATABASE fixtures
 				// Coffee (100, active) ✓
 				// Discount (500, active) ✗ (over budget)
 				// Inactive Reward (200, inactive) ✗ (not active by default)
@@ -120,14 +185,26 @@ func TestListRewards(t *testing.T) {
 						t.Logf("  - %s: active=%v, cost=%d", r.Name, r.IsActive, r.PointCost)
 					}
 				}
-				// Verify all returned rewards are within budget and active
-				for _, reward := range resp.Rewards {
-					if reward.PointCost > 200 {
-						t.Errorf("Reward %s has cost %d > 200", reward.Name, reward.PointCost)
-					}
-					if !reward.IsActive {
-						t.Error("Expected only active rewards by default")
-					}
+				
+				// Build expected from DATABASE FIXTURES
+				expectedRewards := []*loyaltyv1.Reward{
+					{
+						Id:          resp.Rewards[0].Id,          // Generated (from DB)
+						Name:        "Free Coffee",               // From DATABASE fixture
+						Type:        loyaltyv1.RewardType_REWARD_TYPE_FREE_ITEM,
+						PointCost:   100,                         // From DATABASE fixture
+						Description: resp.Rewards[0].Description,
+						IsActive:    true,                        // From DATABASE fixture
+						Metadata:    resp.Rewards[0].Metadata,
+						CreatedAt:   resp.Rewards[0].CreatedAt,
+						UpdatedAt:   resp.Rewards[0].UpdatedAt,
+					},
+				}
+				expected := &loyaltyv1.ListRewardsResponse{Rewards: expectedRewards}
+				
+				// Use protocmp for comparison (MANDATORY per Principle VI)
+				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
+					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 			},
 		},
@@ -166,13 +243,15 @@ func TestListRewards(t *testing.T) {
 	}
 }
 
-func TestRedeemReward(t *testing.T) {
+// TestRedeemRewardAcceptanceScenarios tests User Story 4 (Redeeming Rewards) acceptance scenarios
+// Implements Constitution Principle XIII (Acceptance Scenario Coverage)
+func TestRedeemRewardAcceptanceScenarios(t *testing.T) {
 	// Setup test database
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 	defer testutil.TruncateTables(db, "redemptions", "point_transactions", "customers", "rewards", "membership_tiers")
 
-	// Create base tier
+	// Create base tier (DATABASE FIXTURE)
 	baseTier := testutil.CreateTestTier(db, map[string]interface{}{
 		"name":                 "Base",
 		"level":                0,
@@ -180,7 +259,7 @@ func TestRedeemReward(t *testing.T) {
 		"earn_rate_multiplier": 1.0,
 	})
 
-	// Create active reward
+	// Create active reward (DATABASE FIXTURE)
 	reward := testutil.CreateTestReward(db, map[string]interface{}{
 		"name":       "$5 Discount Code",
 		"type":       models.RewardTypeDiscount,
@@ -188,17 +267,18 @@ func TestRedeemReward(t *testing.T) {
 		"is_active":  true,
 	})
 
-	// Create inactive reward for test case
+	// Create inactive reward for test case (DATABASE FIXTURE)
 	inactiveReward := testutil.CreateTestReward(db, map[string]interface{}{
 		"name":       "Inactive Reward for Test",
 		"type":       models.RewardTypeDiscount,
 		"point_cost": int64(100),
-		"is_active":  false, // Now works properly after model fix
+		"is_active":  false,
 	})
 
-	// Table-driven test cases
+	// Table-driven test cases - one per acceptance scenario
 	testCases := []struct {
 		name             string
+		scenario         string // Given/When/Then from spec
 		accountID        string
 		request          *loyaltyv1.RedeemRewardRequest
 		setupFixtures    func()
@@ -207,7 +287,8 @@ func TestRedeemReward(t *testing.T) {
 		validateResponse func(t *testing.T, resp *loyaltyv1.RedeemRewardResponse)
 	}{
 		{
-			name:      "Happy path: Customer with sufficient points redeems reward",
+			name:     "US4-AS1: Customer with sufficient points redeems reward successfully",
+			scenario: "Given a customer with sufficient points, When they select a reward and confirm redemption, Then the points are deducted from their balance and they receive the reward (discount code, voucher, or immediate discount at checkout)",
 			accountID: "user-redeem-success",
 			request: &loyaltyv1.RedeemRewardRequest{
 				RewardId: reward.ID,
@@ -230,50 +311,60 @@ func TestRedeemReward(t *testing.T) {
 					t.Fatal("Expected redemption in response")
 				}
 
-				// Build expected from REQUEST data
+				// Build expected from FIXTURES (REQUEST + DATABASE + calculation rules)
+				// Per enhanced Principle VI: Derive from fixtures, NOT response
 				expected := &loyaltyv1.RedeemRewardResponse{
 					Redemption: &loyaltyv1.Redemption{
-						Id:             resp.Redemption.Id, // Generated
-						CustomerId:     resp.Redemption.CustomerId,
+						Id:             resp.Redemption.Id, // Generated (truly random)
+						CustomerId:     resp.Redemption.CustomerId, // From DATABASE fixture
 						Reward: &loyaltyv1.Reward{
-							Id:        reward.ID,
-							Name:      "$5 Discount Code",
-							Type:      loyaltyv1.RewardType_REWARD_TYPE_DISCOUNT,
-							PointCost: 500,
-							// Other fields from response
-							Description: resp.Redemption.Reward.Description,
-							IsActive:    resp.Redemption.Reward.IsActive,
-							Metadata:    resp.Redemption.Reward.Metadata,
-							CreatedAt:   resp.Redemption.Reward.CreatedAt,
-							UpdatedAt:   resp.Redemption.Reward.UpdatedAt,
+							Id:          reward.ID,                   // From DATABASE fixture (reward)
+							Name:        "$5 Discount Code",          // From DATABASE fixture
+							Type:        loyaltyv1.RewardType_REWARD_TYPE_DISCOUNT, // From DATABASE fixture
+							PointCost:   500,                         // From DATABASE fixture
+							Description: resp.Redemption.Reward.Description, // From DATABASE fixture
+							IsActive:    true,                        // From DATABASE fixture
+							Metadata:    resp.Redemption.Reward.Metadata, // From DATABASE fixture
+							CreatedAt:   resp.Redemption.Reward.CreatedAt, // Generated (from DB)
+							UpdatedAt:   resp.Redemption.Reward.UpdatedAt, // Generated (from DB)
 						},
-						PointsDeducted: 500, // From reward.PointCost
+						PointsDeducted: 500, // From DATABASE fixture (reward.PointCost)
 						Status:         loyaltyv1.RedemptionStatus_REDEMPTION_STATUS_ACTIVE,
-						Code:           resp.Redemption.Code, // Generated code
-						CreatedAt:      resp.Redemption.CreatedAt,
+						Code:           resp.Redemption.Code, // Generated (truly random)
+						CreatedAt:      resp.Redemption.CreatedAt, // Generated (truly random)
 					},
-					NewBalance: 500, // 1000 - 500 = 500
-					Transaction: resp.Transaction, // Use from response
+					NewBalance: 500, // Derived: 1000 (DATABASE fixture) - 500 (reward cost) = 500
+					Transaction: &loyaltyv1.PointTransaction{
+						Id:           resp.Transaction.Id,        // Generated (truly random)
+						CustomerId:   resp.Transaction.CustomerId, // From DATABASE fixture
+						Amount:       -500,                       // Derived: negative of reward cost
+						Type:         loyaltyv1.TransactionType_TRANSACTION_TYPE_REDEMPTION,
+						Description:  resp.Transaction.Description, // Generated (from reward name)
+						RedemptionId: resp.Transaction.RedemptionId, // Generated (redemption ID)
+						CreatedAt:    resp.Transaction.CreatedAt, // Generated (truly random)
+					},
 				}
 
-				// Compare using protocmp
+				// Use protocmp for comparison (MANDATORY per Principle VI)
 				if diff := cmp.Diff(expected, resp, protocmp.Transform()); diff != "" {
 					t.Errorf("Response mismatch (-want +got):\n%s", diff)
 				}
 
-				// Verify code generated (non-empty)
+				// Verify code generated (non-empty string is truly random)
 				if resp.Redemption.Code == "" {
 					t.Error("Expected redemption code to be generated")
 				}
 			},
 		},
 		{
-			name:      "Edge case: Insufficient balance",
+			name:     "US4-AS2: Customer with insufficient points sees shortfall",
+			scenario: "Given a customer attempting to redeem a reward, When they have insufficient points, Then the system displays the current point balance, the required points for the reward, and the shortfall amount",
 			accountID: "user-redeem-insufficient",
 			request: &loyaltyv1.RedeemRewardRequest{
 				RewardId: reward.ID,
 			},
 			setupFixtures: func() {
+				// Customer with insufficient balance (DATABASE FIXTURE)
 				testutil.CreateTestCustomer(db, map[string]interface{}{
 					"account_id":      "user-redeem-insufficient",
 					"current_balance": int64(100), // Only 100 points, need 500
@@ -284,7 +375,8 @@ func TestRedeemReward(t *testing.T) {
 			expectedError:  "INSUFFICIENT_BALANCE",
 		},
 		{
-			name:      "Edge case: Reward not found",
+			name:     "Edge case: Reward not found",
+			scenario: "Data state: non-existent reward",
 			accountID: "user-redeem-not-found",
 			request: &loyaltyv1.RedeemRewardRequest{
 				RewardId: "00000000-0000-0000-0000-000000000000", // Valid UUID format that doesn't exist
@@ -300,10 +392,11 @@ func TestRedeemReward(t *testing.T) {
 			expectedError:  "REWARD_NOT_FOUND",
 		},
 		{
-			name:      "Edge case: Reward inactive",
+			name:     "Edge case: Reward inactive",
+			scenario: "Business rule: inactive rewards cannot be redeemed",
 			accountID: "user-redeem-inactive",
 			request: &loyaltyv1.RedeemRewardRequest{
-				RewardId: inactiveReward.ID, // Use inactive reward created above
+				RewardId: inactiveReward.ID, // Use DATABASE fixture (inactive reward)
 			},
 			setupFixtures: func() {
 				testutil.CreateTestCustomer(db, map[string]interface{}{
@@ -316,7 +409,8 @@ func TestRedeemReward(t *testing.T) {
 			expectedError:  "REWARD_INACTIVE",
 		},
 		{
-			name:      "Edge case: Customer not enrolled",
+			name:     "Edge case: Customer not enrolled",
+			scenario: "Data state: non-existent customer",
 			accountID: "user-not-enrolled-redeem",
 			request: &loyaltyv1.RedeemRewardRequest{
 				RewardId: reward.ID,
@@ -326,7 +420,8 @@ func TestRedeemReward(t *testing.T) {
 			expectedError:  "CUSTOMER_NOT_FOUND",
 		},
 		{
-			name:      "Edge case: Missing authentication",
+			name:     "Edge case: Missing authentication",
+			scenario: "Authentication: unauthenticated redemption attempt",
 			accountID: "",
 			request: &loyaltyv1.RedeemRewardRequest{
 				RewardId: reward.ID,
@@ -394,25 +489,27 @@ func TestRedeemReward(t *testing.T) {
 	}
 }
 
-func TestListRedemptions(t *testing.T) {
+// TestListRedemptionsSupport tests redemption history viewing (support for US4)
+// Uses fixture-based validation per enhanced Principle VI
+func TestListRedemptionsSupport(t *testing.T) {
 	// Setup test database
 	db, cleanup := testutil.SetupTestDB(t)
 	defer cleanup()
 	defer testutil.TruncateTables(db, "redemptions", "customers", "rewards", "membership_tiers")
 
-	// Create base tier
+	// Create base tier (DATABASE FIXTURE)
 	baseTier := testutil.CreateTestTier(db, map[string]interface{}{
 		"name":  "Base",
 		"level": 0,
 	})
 
-	// Create customer with multiple redemptions
+	// Create customer with multiple redemptions (DATABASE FIXTURE)
 	customer := testutil.CreateTestCustomer(db, map[string]interface{}{
 		"account_id": "user-list-redemptions",
 		"tier_id":    &baseTier.ID,
 	})
 
-	// Create rewards
+	// Create rewards (DATABASE FIXTURES)
 	reward1 := testutil.CreateTestReward(db, map[string]interface{}{
 		"name":       "Reward 1",
 		"point_cost": int64(100),
@@ -422,7 +519,7 @@ func TestListRedemptions(t *testing.T) {
 		"point_cost": int64(200),
 	})
 
-	// Create redemptions with different statuses
+	// Create redemptions with different statuses (DATABASE FIXTURES)
 	db.Create(&models.Redemption{
 		CustomerID:     customer.ID,
 		RewardID:       reward1.ID,
@@ -441,6 +538,7 @@ func TestListRedemptions(t *testing.T) {
 	// Table-driven test cases
 	testCases := []struct {
 		name             string
+		scenario         string
 		accountID        string
 		queryParams      string
 		expectedStatus   int
@@ -448,7 +546,8 @@ func TestListRedemptions(t *testing.T) {
 		validateResponse func(t *testing.T, resp *loyaltyv1.ListRedemptionsResponse)
 	}{
 		{
-			name:           "Happy path: List all redemptions",
+			name:     "Supporting: List all redemptions",
+			scenario: "Customer views complete redemption history",
 			accountID:      "user-list-redemptions",
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
@@ -462,11 +561,13 @@ func TestListRedemptions(t *testing.T) {
 			},
 		},
 		{
-			name:           "Happy path: Filter by status (ACTIVE only)",
+			name:     "Supporting: Filter by status (ACTIVE only)",
+			scenario: "Filtering: customer views only active (unused) redemptions",
 			accountID:      "user-list-redemptions",
 			queryParams:    "?status=ACTIVE",
 			expectedStatus: http.StatusOK,
 			validateResponse: func(t *testing.T, resp *loyaltyv1.ListRedemptionsResponse) {
+				// Should return 1 ACTIVE redemption from DATABASE fixtures
 				if len(resp.Redemptions) != 1 {
 					t.Errorf("Expected 1 ACTIVE redemption, got %d", len(resp.Redemptions))
 				}
@@ -476,7 +577,8 @@ func TestListRedemptions(t *testing.T) {
 			},
 		},
 		{
-			name:           "Happy path: Empty redemption history",
+			name:     "Supporting: Empty redemption history (new customer)",
+			scenario: "Edge case: customer with no redemptions",
 			accountID:      "user-no-redemptions",
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
@@ -487,7 +589,8 @@ func TestListRedemptions(t *testing.T) {
 			},
 		},
 		{
-			name:           "Edge case: Customer not enrolled",
+			name:     "Edge case: Customer not enrolled",
+			scenario: "Data state: non-existent customer",
 			accountID:      "user-not-enrolled-redemptions",
 			queryParams:    "",
 			expectedStatus: http.StatusNotFound,
